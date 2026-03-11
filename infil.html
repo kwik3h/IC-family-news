@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infiltration Report Parser</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
+        h1 { color: #58a6ff; margin-bottom: 5px; }
+        p { color: #8b949e; }
+        textarea { width: 100%; height: 150px; background: #010409; color: #58a6ff; border: 1px solid #30363d; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-family: monospace; box-sizing: border-box; }
+        .btn-container { display: flex; gap: 10px; margin-bottom: 20px; }
+        button { background: #238636; color: white; border: 1px solid rgba(240,246,252,0.1); padding: 8px 16px; cursor: pointer; font-weight: bold; border-radius: 6px; transition: 0.2s; }
+        button:hover { background: #2ea043; }
+        .copy-btn { background: #1f6feb; }
+        .copy-btn:hover { background: #388bfd; }
+        
+        /* Output Box Styling */
+        .output-container { background: #161b22; padding: 20px; border: 1px solid #30363d; border-radius: 6px; font-family: 'Courier New', Courier, monospace; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
+        hr { border: none; border-top: 1px dashed #444; margin: 12px 0; }
+        
+        /* Larger, bolder section headers */
+        .section-header { font-weight: 900; font-size: 1.5em; color: #ffffff; letter-spacing: 1px; margin-top: 25px; margin-bottom: 15px; border-bottom: 2px solid #30363d; padding-bottom: 5px; }
+        
+        /* Custom Colors for Resources */
+        .res-Cash { color: #e3b341; font-weight: bold; }       /* Yellow/Gold */
+        .res-Food { color: #d4a373; font-weight: bold; }       /* Brown/Wheat */
+        .res-Iron { color: #a0aaba; font-weight: bold; }       /* Grey/Silver */
+        .res-Octarine { color: #b854d4; font-weight: bold; }   /* Pink/Purple */
+        .res-Endurium { color: #00bcd4; font-weight: bold; }   /* Cyan/Teal */
+        
+        /* Formatting */
+        .emp-name { color: #ff7b72; font-weight: bold; }
+        .highlight { color: #58a6ff; font-weight: bold; }
+        .success-text { color: #3fb950; font-weight: bold; }
+        .fail-text { color: #f85149; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div>
+    <h1>Infiltration Report Parser</h1>
+    <p>Paste raw infiltrated logs. Formats Units, Aid, Defenses, Fleets, and Buildings.</p>
+</div>
+
+<textarea id="logInput" placeholder="Paste your raw infiltrated game logs here..."></textarea>
+
+<div class="btn-container">
+    <button onclick="processLogs()">Process Logs</button>
+    <button class="copy-btn" onclick="copyToClipboard()">Copy Report to Clipboard</button>
+</div>
+
+<div id="output" class="output-container">Result will appear here...</div>
+
+<script>
+// Helper to standardize plurals for clean grouping
+function normalizeName(name) {
+    name = name.trim();
+    if (name === "Exploration Ship") return "Exploration Ships";
+    if (name === "Laser") return "Lasers";
+    if (name === "Mining facility") return "Mining Facilities";
+    if (name === "Refinement station") return "Refinement Stations";
+    if (name === "Research center") return "Research Centers";
+    if (name === "Hydroponic farm") return "Hydroponic Farms";
+    if (name === "Occult center") return "Occult Centers";
+    if (!name.endsWith("s")) return name + "s";
+    return name;
+}
+
+function processLogs() {
+    const rawData = document.getElementById('logInput').value;
+    
+    // Split the logs into distinct blocks separated by "T-XXX:"
+    // This keeps multiline defense reports grouped together
+    const blocks = rawData.split(/(?=T-\d+:)/).map(b => b.trim()).filter(b => b);
+
+    let units = {};
+    let buildings = {};
+    let aidReceived = {};
+    let fleets = {};
+    let exploredCount = 0;
+    let portals = [];
+    
+    // Defense tracking
+    let defenseSuccess = [];
+    let defenseFail = {}; // Grouped by attacker
+
+    blocks.forEach(block => {
+        // --- UNITS ---
+        if (block.includes("Construction completed")) {
+            let match = block.match(/We have built ([\d,]+) (.*?)\./);
+            if (match) {
+                let qty = parseInt(match[1].replace(/,/g, ''));
+                let name = normalizeName(match[2]);
+                units[name] = (units[name] || 0) + qty;
+            }
+        }
+        
+        // --- BUILDINGS ---
+        else if (block.includes("Buildings complete")) {
+            let match = block.match(/We have built ([\d,]+) (.*?) on/);
+            if (match) {
+                let qty = parseInt(match[1].replace(/,/g, ''));
+                let name = normalizeName(match[2]);
+                buildings[name] = (buildings[name] || 0) + qty;
+            }
+        }
+        
+        // --- AID ---
+        else if (block.includes("Aid shipment")) {
+            let match = block.match(/We have received an aid shipment of (.*?) from (\w+)\./);
+            if (match) {
+                let sender = match[2];
+                let resources = match[1];
+                if (!aidReceived[sender]) aidReceived[sender] = { Cash: 0, Food: 0, Iron: 0, Octarine: 0, Endurium: 0 };
+                
+                let resParts = resources.matchAll(/([\d,]+)\s+(Cash|Food|Iron|Endurium|Octarine)/ig);
+                for (const part of resParts) {
+                    let type = part[2].charAt(0).toUpperCase() + part[2].slice(1).toLowerCase(); 
+                    aidReceived[sender][type] += parseInt(part[1].replace(/,/g, ''));
+                }
+            }
+        }
+        
+        // --- FLEETS ---
+        else if (block.includes("Destination reached")) {
+            let match = block.match(/attack on planet (\d+) in the (\d+):(\d+) system/);
+            if (match) {
+                let target = `${match[2]}:${match[3]} (Planet ${match[1]})`;
+                fleets[target] = (fleets[target] || 0) + 1;
+            }
+        }
+        
+        // --- EXPLORATION ---
+        else if (block.includes("Explored a planet")) {
+            exploredCount++;
+        }
+        
+        // --- PORTALS ---
+        else if (block.includes("Portal completed")) {
+            let match = block.match(/planet (\d+) in the (\d+),(\d+) system/);
+            if (match) {
+                portals.push(`${match[2]}:${match[3]} (Planet ${match[1]})`);
+            }
+        }
+        
+        // --- DEFENSE REPORTS ---
+        else if (block.includes("Defense Report")) {
+            // Success
+            if (block.includes("fight the attackers off")) {
+                let match = block.match(/planet (\d+) at x:(\d+), y:(\d+) was attacked by (\w+) of family (\d+).*?In the fight (.*)/is);
+                if (match) {
+                    defenseSuccess.push(`Planet ${match[1]} in ${match[2]}:${match[3]} defended against ${match[4]} (Family ${match[5]}). ${match[6].trim()}`);
+                }
+            } 
+            // Failed
+            else if (block.includes("flee the planet")) {
+                let match = block.match(/planet (\d+) at x:(\d+), y:(\d+) was attacked by (\w+) of family (\d+).*?flee the planet\.(.*)/is);
+                if (match) {
+                    let attacker = `${match[4]} (Family ${match[5]})`;
+                    let loc = `${match[2]}:${match[3]}`;
+                    let result = match[6].trim();
+                    
+                    if (!defenseFail[attacker]) defenseFail[attacker] = [];
+                    defenseFail[attacker].push({ loc: loc, planet: match[1], result: result });
+                }
+            }
+        }
+    });
+
+    // ==========================================
+    // BUILDING THE HTML OUTPUT
+    // ==========================================
+    let html = ``;
+
+    // 1. UNITS
+    html += `<div class="section-header">Units Constructed</div>`;
+    if (Object.keys(units).length > 0) {
+        Object.keys(units).sort((a,b) => units[b] - units[a]).forEach(u => {
+            html += `<div>* <b>${u}:</b> ${units[u].toLocaleString()}</div>`;
+        });
+    } else {
+        html += `<div>No units constructed.</div>`;
+    }
+
+    // 2. AID RECEIVED
+    html += `<div class="section-header">Aid Received</div>`;
+    const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
+    let aidFound = false;
+    
+    Object.keys(aidReceived).sort().forEach(sender => {
+        let r = aidReceived[sender];
+        let parts = [];
+        resourceOrder.forEach(k => {
+            if (r[k] > 0) {
+                parts.push(`<div>* <span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`);
+            }
+        });
+        if (parts.length > 0) {
+            aidFound = true;
+            html += `<div style="margin-top: 15px;"><b>From <span class="emp-name">${sender}</span>:</b></div>`;
+            html += parts.join('');
+        }
+    });
+    if (!aidFound) html += `<div>No aid received.</div>`;
+
+    // 3. DEFENSE REPORTS
+    html += `<div class="section-header">Defense Reports</div>`;
+    
+    html += `<div class="success-text" style="margin-bottom: 5px;">Successful Defenses (${defenseSuccess.length}):</div>`;
+    if (defenseSuccess.length > 0) {
+        defenseSuccess.forEach(d => html += `<div>* ${d}</div>`);
+    } else {
+        html += `<div>None.</div>`;
+    }
+
+    let failCount = Object.values(defenseFail).reduce((acc, arr) => acc + arr.length, 0);
+    html += `<div class="fail-text" style="margin-top: 15px; margin-bottom: 5px;">Failed Defenses (${failCount}):</div>`;
+    if (failCount > 0) {
+        Object.keys(defenseFail).forEach(attacker => {
+            let incidents = defenseFail[attacker];
+            let sysList = incidents.map(i => i.loc).filter((v, i, a) => a.indexOf(v) === i).join(", ");
+            html += `<div style="margin-top: 10px;">* <b>vs. <span class="emp-name">${attacker}</span>:</b> ${incidents.length} planet(s) lost (Systems ${sysList}).</div>`;
+            
+            // List unique losses (e.g. "At least we didn't lose a single unit" vs "lost 1 laser")
+            let losses = incidents.map(i => i.result).filter((v, i, a) => a.indexOf(v) === i);
+            losses.forEach(l => {
+                if(l) html += `<div style="margin-left: 20px; color: #8b949e;">- ${l}</div>`;
+            });
+        });
+    } else {
+        html += `<div>None.</div>`;
+    }
+
+    // 4. FLEETS
+    html += `<div class="section-header">Fleet Movements (Attacks Initiated)</div>`;
+    html += `<div>Fleets have reached their destinations to attack the following coordinates:</div>`;
+    if (Object.keys(fleets).length > 0) {
+        Object.keys(fleets).sort((a,b) => fleets[b] - fleets[a]).forEach(f => {
+            html += `<div>* <b>${f}:</b> Targeted ${fleets[f]} time(s)</div>`;
+        });
+    } else {
+        html += `<div>No fleets arrived.</div>`;
+    }
+
+    // 5. PLANETARY DEV
+    html += `<div class="section-header">Planetary Development</div>`;
+    html += `<div><b>Exploration:</b></div>`;
+    html += `<div>* ${exploredCount} planet(s) were successfully explored.</div><br>`;
+    
+    html += `<div><b>Portals Completed (${portals.length}):</b></div>`;
+    if (portals.length > 0) {
+        html += `<div>* Systems: ${portals.join(", ")}</div><br>`;
+    } else {
+        html += `<div>* 0 Portals built.</div><br>`;
+    }
+
+    html += `<div><b>Buildings Constructed:</b></div>`;
+    if (Object.keys(buildings).length > 0) {
+        Object.keys(buildings).sort((a,b) => buildings[b] - buildings[a]).forEach(b => {
+            html += `<div>* <b>${b}:</b> ${buildings[b].toLocaleString()}</div>`;
+        });
+    } else {
+        html += `<div>* No buildings constructed.</div>`;
+    }
+
+    document.getElementById('output').innerHTML = html;
+}
+
+function copyToClipboard() {
+    const outputContainer = document.getElementById('output');
+    if (outputContainer.innerText.includes("Result will appear here")) {
+        alert("Please process logs before copying!");
+        return;
+    }
+    navigator.clipboard.writeText(outputContainer.innerText).then(() => {
+        alert("Report copied to clipboard! Ready to paste.");
+    }).catch(err => {
+        alert("Failed to copy: " + err);
+    });
+}
+</script>
+
+</body>
+</html>
