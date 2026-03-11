@@ -5,33 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Imperial Conflict Log Parser</title>
     <style>
-        body { font-family: monospace; background: #121212; color: #e0e0e0; padding: 20px; }
-        textarea { width: 100%; height: 200px; background: #1e1e1e; color: #00ff00; border: 1px solid #333; padding: 10px; margin-bottom: 10px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
+        h1 { color: #58a6ff; }
+        p { color: #8b949e; }
+        textarea { width: 100%; height: 150px; background: #010409; color: #58a6ff; border: 1px solid #30363d; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-family: monospace; }
         .btn-container { display: flex; gap: 10px; margin-bottom: 20px; }
-        button { background: #007bff; color: white; border: none; padding: 10px 20px; cursor: pointer; font-weight: bold; border-radius: 4px; }
-        button:hover { background: #0056b3; }
-        .copy-btn { background: #28a745; }
-        .copy-btn:hover { background: #218838; }
-        pre { background: #000; padding: 15px; border: 1px solid #444; white-space: pre-wrap; word-wrap: break-word; }
-        .header { border-bottom: 2px solid #444; margin-bottom: 20px; padding-bottom: 10px; }
+        button { background: #238636; color: white; border: 1px solid rgba(240,246,252,0.1); padding: 8px 16px; cursor: pointer; font-weight: bold; border-radius: 6px; transition: 0.2s; }
+        button:hover { background: #2ea043; }
+        .copy-btn { background: #1f6feb; }
+        .copy-btn:hover { background: #388bfd; }
+        
+        /* Output Box Styling */
+        .output-container { background: #161b22; padding: 20px; border: 1px solid #30363d; border-radius: 6px; font-family: 'Courier New', Courier, monospace; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
+        hr { border: none; border-top: 1px dashed #444; margin: 12px 0; }
+        .section-header { text-align: center; font-weight: bold; color: #8b949e; letter-spacing: 1px; }
+        
+        /* Custom Colors for Resources */
+        .res-Cash { color: #e3b341; font-weight: bold; }       /* Yellow/Gold */
+        .res-Food { color: #d4a373; font-weight: bold; }       /* Brown/Wheat */
+        .res-Iron { color: #a0aaba; font-weight: bold; }       /* Grey/Silver */
+        .res-Octarine { color: #b854d4; font-weight: bold; }   /* Pink/Purple */
+        .res-Endurium { color: #00bcd4; font-weight: bold; }   /* Cyan/Teal */
+        
+        /* Formatting */
+        .tick { color: #6e7681; }
+        .emp-name { color: #ff7b72; font-weight: bold; }
     </style>
 </head>
 <body>
 
-<div class="header">
+<div>
     <h1>Imperial Conflict Log Parser</h1>
-    <p>Paste your raw logs here and click Process Logs.</p>
+    <p>Paste your raw logs here. Resources are ordered and color-coded!</p>
 </div>
 
 <textarea id="logInput" placeholder="Paste your raw game logs here..."></textarea>
-<br>
 <div class="btn-container">
     <button onclick="processLogs()">Process Logs</button>
-    <button class="copy-btn" onclick="copyToClipboard()">Copy Report</button>
+    <button class="copy-btn" onclick="copyToClipboard()">Copy Report to Clipboard</button>
 </div>
 
-<h2>Result</h2>
-<pre id="output">Result will appear here...</pre>
+<div id="output" class="output-container">Result will appear here...</div>
 
 <script>
 function processLogs() {
@@ -48,80 +62,88 @@ function processLogs() {
     let aidReceived = {};
 
     lines.forEach(line => {
-        // Explored
         if (line.includes("explored planet")) explored++;
 
-        // Captures
         let capMatch = line.match(/T-(\d+)\s+The forces of (\w+) took (planet \d+ in the [\d, ]+ system) from (.*?) \(13694\)/);
         if (capMatch) {
-            let entry = `T-${capMatch[1]} ${capMatch[2]} took ${capMatch[3]} from ${capMatch[4]}.`;
+            let entry = `<span class="tick">T-${capMatch[1]}</span> <span class="emp-name">${capMatch[2]}</span> took ${capMatch[3]} from ${capMatch[4]}.`;
             if (capMatch[2].toLowerCase() === "jealous") myCaptures.push(entry);
             else familyCaptures.push(entry);
         }
 
-        // Defeats
         let defMatch = line.match(/T-(\d+)\s+After a brave fight our family member (\w+) had to flee the (?:planet\s+)?(planet \d+ in the [\d, ]+ system) which was attacked by (.*?) of family 13694/);
         if (defMatch) {
-            let entry = `T-${defMatch[1]} ${defMatch[2]} fled ${defMatch[3]} (${defMatch[4]}).`;
+            let entry = `<span class="tick">T-${defMatch[1]}</span> <span class="emp-name">${defMatch[2]}</span> fled ${defMatch[3]} (${defMatch[4]}).`;
             if (defMatch[2].toLowerCase() === "jealous") myDefeats.push(entry);
             else familyDefeats.push(entry);
             missingPlanets.add(defMatch[3]);
         }
 
-        // Evolutions
         let evoMatch = line.match(/T-(\d+)\s+(\w+) evolved to an empire of (.*?)\./);
-        if (evoMatch) evolutions.push(`T-${evoMatch[1]} ${evoMatch[2]} evolved to ${evoMatch[3]}.`);
+        if (evoMatch) evolutions.push(`<span class="tick">T-${evoMatch[1]}</span> <span class="emp-name">${evoMatch[2]}</span> evolved to <b>${evoMatch[3]}</b>.`);
 
-        // Aid
         let aidMatch = line.match(/T-(\d+)\s+(?:In the name of cooperation\s+)?(\w+) has sent a shipment of (.*?) to (\w+)/);
         if (aidMatch) {
             let receiver = aidMatch[4];
             let resources = aidMatch[3];
-            if (!aidReceived[receiver]) aidReceived[receiver] = { Cash: 0, Food: 0, Iron: 0, Endurium: 0, Octarine: 0 };
+            if (!aidReceived[receiver]) aidReceived[receiver] = { Cash: 0, Food: 0, Iron: 0, Octarine: 0, Endurium: 0 };
             
-            let resParts = resources.matchAll(/([\d,]+)\s+(Cash|Food|Iron|Endurium|Octarine)/g);
+            let resParts = resources.matchAll(/([\d,]+)\s+(Cash|Food|Iron|Endurium|Octarine)/ig);
             for (const part of resParts) {
-                aidReceived[receiver][part[2]] += parseInt(part[1].replace(/,/g, ''));
+                let type = part[2].charAt(0).toUpperCase() + part[2].slice(1).toLowerCase(); 
+                aidReceived[receiver][type] += parseInt(part[1].replace(/,/g, ''));
             }
         }
     });
 
-    // Formatting Output
-    let res = `Result\n--------------------\n    Explored   \n-------------------\n${explored} planet(s) Explored.\n\n`;
+    // Building the beautiful HTML output
+    let html = `<div>Result</div>`;
+    html += `<hr><div class="section-header">Explored</div><hr><div>${explored} planet(s) Explored.</div><br>`;
     
-    res += `--------------------\n    Family Captures   \n-------------------\n${familyCaptures.length} planet(s) Family Captures.\n` + familyCaptures.join('\n') + "\n\n";
-    res += `--------------------\n    Captures   \n-------------------\n${myCaptures.length} planet(s) Captures.\n` + myCaptures.join('\n') + "\n\n";
-    res += `--------------------\n    Family Defeats   \n-------------------\n${familyDefeats.length} planet(s) Family Defeats.\n` + familyDefeats.join('\n') + "\n\n";
-    res += `--------------------\n    Defeats   \n-------------------\n${myDefeats.length} planet(s) Defeats.\n` + myDefeats.join('\n') + "\n\n";
-    res += `--------------------\n    Empire Evolutions   \n-------------------\n${evolutions.length} evolution(s).\n` + evolutions.join('\n') + "\n\n";
+    html += `<hr><div class="section-header">Family Captures</div><hr><div>${familyCaptures.length} planet(s) Family Captures.</div>` + familyCaptures.join('<br>') + `<br><br>`;
+    html += `<hr><div class="section-header">Captures</div><hr><div>${myCaptures.length} planet(s) Captures.</div>` + myCaptures.join('<br>') + `<br><br>`;
+    html += `<hr><div class="section-header">Family Defeats</div><hr><div>${familyDefeats.length} planet(s) Family Defeats.</div>` + familyDefeats.join('<br>') + `<br><br>`;
+    html += `<hr><div class="section-header">Defeats</div><hr><div>${myDefeats.length} planet(s) Defeats.</div>` + myDefeats.join('<br>') + `<br><br>`;
+    html += `<hr><div class="section-header">Empire Evolutions</div><hr><div>${evolutions.length} evolution(s).</div>` + evolutions.join('<br>') + `<br><br>`;
     
-    res += `--------------------\n- List of destroyed planets:\n--------------------\n    Planets still missing   \n-------------------\n${missingPlanets.size} planet(s) missing.\n`;
-    missingPlanets.forEach(p => res += `* ${p}\n`);
+    html += `<hr><div class="section-header">List of destroyed planets:</div><hr><div class="section-header">Planets still missing</div><hr><div>${missingPlanets.size} planet(s) missing.</div>`;
+    Array.from(missingPlanets).sort().forEach(p => html += `<div>* ${p}</div>`);
 
-    res += `\n--------------------\nOPEN RETAKES\n--------------------\n`;
-    missingPlanets.forEach(p => res += `${p}\n`);
+    html += `<br><hr><div class="section-header">OPEN RETAKES</div><hr>`;
+    Array.from(missingPlanets).sort().forEach(p => html += `<div>${p}</div>`);
 
-    res += `\n--------------------\nOPEN RETAKES Clean List\n--------------------\n${missingPlanets.size} planet(s) missing in action\n`;
+    html += `<br><hr><div class="section-header">OPEN RETAKES Clean List</div><hr><div>${missingPlanets.size} planet(s) missing in action</div><br>`;
 
-    res += `\n--------------------\n- Aid Received (Total to Each Member) -\n--------------------\n`;
+    html += `<hr><div class="section-header">- Aid Received (Total to Each Member) -</div><hr>`;
+    
+    // Forcing the strict resource order
+    const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
+    
     Object.keys(aidReceived).sort().forEach(name => {
         let r = aidReceived[name];
         let parts = [];
-        for (let k in r) if (r[k] > 0) parts.push(`${r[k].toLocaleString()} ${k}`);
-        res += `To ${name}: ${parts.join(', ')}\n`;
+        resourceOrder.forEach(k => {
+            if (r[k] > 0) {
+                parts.push(`<span class="res-${k}">${r[k].toLocaleString()} ${k}</span>`);
+            }
+        });
+        if (parts.length > 0) {
+            html += `<div>To <span class="emp-name">${name}</span>: ${parts.join(', ')}</div>`;
+        }
     });
 
-    document.getElementById('output').innerText = res;
+    document.getElementById('output').innerHTML = html;
 }
 
 function copyToClipboard() {
-    const outputText = document.getElementById('output').innerText;
-    if (outputText === "Result will appear here...") {
+    const outputContainer = document.getElementById('output');
+    if (outputContainer.innerText.includes("Result will appear here")) {
         alert("Please process logs before copying!");
         return;
     }
-    navigator.clipboard.writeText(outputText).then(() => {
-        alert("Report copied to clipboard!");
+    // This copies just the text, stripping the colors so it's game-chat friendly
+    navigator.clipboard.writeText(outputContainer.innerText).then(() => {
+        alert("Report copied to clipboard! Ready to paste.");
     }).catch(err => {
         alert("Failed to copy: " + err);
     });
