@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Imperial Conflict Tools</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #0d1117; 
+            color: #c9d1d9; 
+            padding: 40px 20px; 
+            text-align: center; 
+        }
+        h1 { color: #58a6ff; font-size: 2.5em; margin-bottom: 10px; }
+        p { color: #8b949e; font-size: 1.2em; margin-bottom: 40px; }
+        
+        .nav-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .nav-card {
+            display: block;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 30px;
+            text-decoration: none;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .nav-card:hover {
+            border-color: #58a6ff;
+            background: #1c2128;
+            transform: translateY(-2px);
+        }
+        
+        .card-title {
+            color: #58a6ff;
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .card-desc {
+            color: #8b949e;
+            font-size: 1em;
+        }
+        
+        /* Optional Back Link styling for the other pages */
+        .footer-note {
+            margin-top: 50px;
+            color: #6e7681;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+
+    <div>
+        <h1>Imperial Conflict Tools</h1>
+        <p>Select a tool below to process your game logs.</p>
+    </div>
+
+    <div class="nav-container">
+        <a href="famnews.html" class="nav-card">
+            <div class="card-title">Family News Parser</div>
+            <div class="card-desc">Parse standard family news logs for Captures, Defeats, Aid, and Empire Evolutions.</div>
+        </a>
+
+        <a href="infil.html" class="nav-card">
+            <div class="card-title">Infiltration Report Parser</div>
+            <div class="card-desc">Analyze infiltrated logs to track Enemy Units, Buildings, Fleets, and Defenses.</div>
+        </a>
+    </div>
+
+    <div class="footer-note">
+        Built for the Imperial Conflict community.
+    </div>
+
+</body>
+</html>
