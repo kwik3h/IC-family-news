@@ -3,37 +3,245 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infiltration Report Parser</title>
+    <title>Family News Parser - Imperial Conflict</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
         h1 { color: #58a6ff; margin-bottom: 5px; }
-        p { color: #8b949e; }
-        textarea { width: 100%; height: 150px; background: #010409; color: #58a6ff; border: 1px solid #30363d; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-family: monospace; box-sizing: border-box; }
-        .btn-container { display: flex; gap: 10px; margin-bottom: 20px; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #58a6ff; text-decoration: none; font-size: 0.9em; }
+        .back-link:hover { text-decoration: underline; }
+        
+        /* Input Styling */
+        .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        input[type="text"], textarea { width: 100%; background: #010409; color: #58a6ff; border: 1px solid #30363d; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-family: monospace; box-sizing: border-box; }
+        textarea { height: 250px; }
+        
+        .btn-container { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
         button { background: #238636; color: white; border: 1px solid rgba(240,246,252,0.1); padding: 8px 16px; cursor: pointer; font-weight: bold; border-radius: 6px; transition: 0.2s; }
         button:hover { background: #2ea043; }
         .copy-btn { background: #1f6feb; }
         .copy-btn:hover { background: #388bfd; }
         
+        .save-status { color: #8b949e; font-size: 0.85em; font-style: italic; }
+        
         /* Output Box Styling */
         .output-container { background: #161b22; padding: 20px; border: 1px solid #30363d; border-radius: 6px; font-family: 'Courier New', Courier, monospace; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
         hr { border: none; border-top: 1px dashed #444; margin: 12px 0; }
         
-        /* Larger, bolder section headers */
-        .section-header { font-weight: 900; font-size: 1.5em; color: #ffffff; letter-spacing: 1px; margin-top: 25px; margin-bottom: 15px; border-bottom: 2px solid #30363d; padding-bottom: 5px; }
+        /* Section headers */
+        .section-header { text-align: center; font-weight: 900; font-size: 1.5em; color: #ffffff; letter-spacing: 1px; margin-top: 25px; margin-bottom: 15px; }
         
-        /* Custom Colors for Resources */
-        .res-Cash { color: #e3b341; font-weight: bold; }       /* Yellow/Gold */
-        .res-Food { color: #d4a373; font-weight: bold; }       /* Brown/Wheat */
-        .res-Iron { color: #a0aaba; font-weight: bold; }       /* Grey/Silver */
-        .res-Octarine { color: #b854d4; font-weight: bold; }   /* Pink/Purple */
-        .res-Endurium { color: #00bcd4; font-weight: bold; }   /* Cyan/Teal */
-        
-        /* Formatting */
+        /* Colors for the report */
+        .res-Cash { color: #e3b341; font-weight: bold; }
+        .res-Food { color: #d4a373; font-weight: bold; }
+        .res-Iron { color: #a0aaba; font-weight: bold; }
+        .res-Octarine { color: #b854d4; font-weight: bold; }
+        .res-Endurium { color: #00bcd4; font-weight: bold; }
+        .tick { color: #6e7681; }
         .emp-name { color: #ff7b72; font-weight: bold; }
-        .highlight { color: #58a6ff; font-weight: bold; }
-        .success-text { color: #3fb950; font-weight: bold; }
-        .fail-text { color: #f85149; font-weight: bold; }
+        .attacker-name { color: #f85149; font-weight: bold; }
+        .planet-info { color: #d2a8ff; }
+        
+        /* Clickable Planet Links */
+        .planet-link { color: #d2a8ff; text-decoration: none; font-weight: bold; border-bottom: 1px dashed #d2a8ff; }
+        .planet-link:hover { color: #e2c5ff; border-bottom: 1px solid #e2c5ff; }
+    </style>
+</head>
+<body>
+
+<a href="index.html" class="back-link">← Back to Tools Index</a>
+
+<div>
+    <h1>Family News Parser</h1>
+    <p style="color: #8b949e; margin-top: 0;">Settings are automatically saved for your next visit. Add Galaxy ID to generate clickable planet links.</p>
+</div>
+
+<div class="input-group">
+    <input type="text" id="usernameInput" placeholder="Your Empire Name (e.g., Jealous)" oninput="saveSettings()">
+    <input type="text" id="familyIdInput" placeholder="Target Family ID (e.g., 13757)" oninput="saveSettings()">
+    <input type="text" id="galaxyIdInput" placeholder="Galaxy ID (e.g., 266)" oninput="saveSettings()">
+</div>
+<textarea id="logInput" placeholder="Paste your raw game logs here..."></textarea>
+
+<div class="btn-container">
+    <button onclick="processLogs()">Process Logs</button>
+    <button class="copy-btn" onclick="copyToClipboard()">Copy Report to Clipboard</button>
+    <span id="saveStatus" class="save-status"></span>
+</div>
+
+<div id="output" class="output-container">Result will appear here...</div>
+
+<script>
+// --- AUTO-SAVE LOGIC ---
+function saveSettings() {
+    const settings = {
+        username: document.getElementById('usernameInput').value,
+        familyId: document.getElementById('familyIdInput').value,
+        galaxyId: document.getElementById('galaxyIdInput').value
+    };
+    localStorage.setItem('ic_news_settings', JSON.stringify(settings));
+    
+    // Quick visual cue that it saved
+    const status = document.getElementById('saveStatus');
+    status.innerText = "Settings saved...";
+    setTimeout(() => { status.innerText = ""; }, 1500);
+}
+
+function loadSettings() {
+    const saved = localStorage.getItem('ic_news_settings');
+    if (saved) {
+        const settings = JSON.parse(saved);
+        document.getElementById('usernameInput').value = settings.username || "";
+        document.getElementById('familyIdInput').value = settings.familyId || "";
+        document.getElementById('galaxyIdInput').value = settings.galaxyId || "";
+    }
+}
+
+// Initialize on page load
+window.onload = loadSettings;
+
+// --- PLANET LINK GENERATOR ---
+function createPlanetLink(planetStr, galaxyId) {
+    if (!galaxyId) return `<span class="planet-info">${planetStr}</span>`; // Fallback if no Galaxy ID is entered
+    
+    // Extract coordinates like "73,13" from the string
+    let coordMatch = planetStr.match(/(\d+,\s*\d+)/);
+    if (coordMatch) {
+        let coords = coordMatch[1].replace(/\s/g, ''); // Removes spaces to ensure format is "73,13"
+        let url = `https://imperialconflict.com/systems/view.php?galaxy=${galaxyId}&system=${coords}`;
+        return `<a href="${url}" target="_blank" class="planet-link">${planetStr}</a>`;
+    }
+    return `<span class="planet-info">${planetStr}</span>`;
+}
+
+function processLogs() {
+    const myEmpire = document.getElementById('usernameInput').value.trim().toLowerCase();
+    const targetFamilyId = document.getElementById('familyIdInput').value.trim();
+    const galaxyId = document.getElementById('galaxyIdInput').value.trim();
+    const rawData = document.getElementById('logInput').value;
+    
+    const lines = rawData.split('\n').map(l => l.trim()).filter(l => l);
+    
+    let explored = 0;
+    let familyCaptures = [];
+    let myCaptures = [];
+    let familyDefeats = [];
+    let myDefeats = [];
+    let missingPlanets = new Set();
+    let evolutions = [];
+    let aidReceived = {};
+
+    lines.forEach(line => {
+        // Clean prefixes like "EA" or extra tabs often found in raw news copy-pastes
+        const cleanLine = line.replace(/^[A-Z]+\s+/, '');
+
+        if (cleanLine.toLowerCase().includes("explored planet")) explored++;
+
+        // --- CAPTURE LOGIC ---
+        // Format: The forces of [Name] took [Planet] from [Enemy] ([ID])
+        let capRegex = new RegExp(`T-(\\d+)\\s+The forces of (\\w+) took (planet \\d+ in the [\\d, ]+ system) from (.*?)\\s*\\((${targetFamilyId || '\\d+'})\\)`, "i");
+        let capMatch = cleanLine.match(capRegex);
+        
+        if (capMatch) {
+            let linkedPlanet = createPlanetLink(capMatch[3], galaxyId);
+            let entry = `<span class="tick">T-${capMatch[1]}</span> <span class="emp-name">${capMatch[2]}</span> took ${linkedPlanet} from ${capMatch[4]}.`;
+            if (myEmpire !== "" && capMatch[2].toLowerCase() === myEmpire) myCaptures.push(entry);
+            else familyCaptures.push(entry);
+        }
+
+        // --- DEFEAT/LOSS LOGIC ---
+        // Format: After a brave fight our family member [Name] had to flee the [Planet] which was attacked by [Attacker] of family [ID]
+        let defRegex = new RegExp(`T-(\\d+)\\s+After a brave fight our family member (\\w+) had to flee the (?:planet\\s+)?(planet \\d+ in the [\\d, ]+ system) which was attacked by (.*?) of family (${targetFamilyId || '\\d+'})`, "i");
+        let defMatch = cleanLine.match(defRegex);
+
+        if (defMatch) {
+            let linkedPlanet = createPlanetLink(defMatch[3], galaxyId);
+            let entry = `<span class="tick">T-${defMatch[1]}</span> <span class="emp-name">${defMatch[2]}</span> lost ${linkedPlanet} to <span class="attacker-name">${defMatch[4]}</span> (Family ${defMatch[5]}).`;
+            if (myEmpire !== "" && defMatch[2].toLowerCase() === myEmpire) myDefeats.push(entry);
+            else familyDefeats.push(entry);
+            
+            // Store the raw string for the missing list (links are generated at the end)
+            missingPlanets.add(defMatch[3]);
+        }
+
+        // --- EVOLUTION LOGIC ---
+        let evoMatch = cleanLine.match(/T-(\d+)\s+(\w+) evolved to an empire of (.*?)\./);
+        if (evoMatch) {
+            evolutions.push(`<span class="tick">T-${evoMatch[1]}</span> <span class="emp-name">${evoMatch[2]}</span> evolved to <b>${evoMatch[3]}</b>.`);
+        }
+
+        // --- AID LOGIC ---
+        let aidMatch = cleanLine.match(/T-(\d+)\s+(?:In the name of cooperation\s+)?(\w+) has sent a shipment of (.*?) to (\w+)/);
+        if (aidMatch) {
+            let receiver = aidMatch[4];
+            let resources = aidMatch[3];
+            if (!aidReceived[receiver]) aidReceived[receiver] = { Cash: 0, Food: 0, Iron: 0, Octarine: 0, Endurium: 0 };
+            let resParts = resources.matchAll(/([\d,]+)\s+(Cash|Food|Iron|Endurium|Octarine)/ig);
+            for (const part of resParts) {
+                let type = part[2].charAt(0).toUpperCase() + part[2].slice(1).toLowerCase(); 
+                aidReceived[receiver][type] += parseInt(part[1].replace(/,/g, ''));
+            }
+        }
+    });
+
+    // BUILDING THE HTML
+    let html = `<div style="font-weight: bold; margin-bottom: 10px;">Imperial Intelligence Report</div>`;
+    
+    html += `<hr><div class="section-header">Exploration</div><hr><div>${explored} planet(s) Explored.</div><br>`;
+    
+    html += `<hr><div class="section-header">Captures (Takes)</div><hr>`;
+    if (myCaptures.length) html += `<div><b>Your Captures:</b><br>${myCaptures.join('<br>')}</div><br>`;
+    if (familyCaptures.length) html += `<div><b>Family Captures:</b><br>${familyCaptures.join('<br>')}</div><br>`;
+    if (!myCaptures.length && !familyCaptures.length) html += `<div>No captures found.</div><br>`;
+    
+    html += `<hr><div class="section-header">Defeats (Lost Planets)</div><hr>`;
+    if (myDefeats.length) html += `<div><b>Your Losses:</b><br>${myDefeats.join('<br>')}</div><br>`;
+    if (familyDefeats.length) html += `<div><b>Family Losses:</b><br>${familyDefeats.join('<br>')}</div><br>`;
+    if (!myDefeats.length && !familyDefeats.length) html += `<div>No defeats found.</div><br>`;
+    
+    html += `<hr><div class="section-header">Summary of Unique Planets Lost</div><hr>`;
+    if (missingPlanets.size > 0) {
+        Array.from(missingPlanets).sort().forEach(p => html += `<div>* ${createPlanetLink(p, galaxyId)}</div>`);
+    } else {
+        html += `<div>No missing planets tracked.</div>`;
+    }
+
+    html += `<br><hr><div class="section-header">OPEN RETAKES</div><hr>`;
+    Array.from(missingPlanets).sort().forEach(p => html += `<div>${createPlanetLink(p, galaxyId)}</div>`);
+    
+    html += `<br><hr><div class="section-header">Empire Evolutions</div><hr>` + (evolutions.length ? `<div>${evolutions.join('<br>')}</div>` : '<div>No evolutions detected.</div>') + `<br>`;
+
+    html += `<hr><div class="section-header">- Aid Received (Totals) -</div><hr>`;
+    const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
+    let aidFound = false;
+    Object.keys(aidReceived).sort().forEach(name => {
+        let r = aidReceived[name];
+        let parts = [];
+        resourceOrder.forEach(k => { if (r[k] > 0) parts.push(`<div><span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`); });
+        if (parts.length > 0) {
+            aidFound = true;
+            html += `<div style="margin-top: 20px;">To <span class="emp-name">${name}</span>:</div>` + parts.join('');
+        }
+    });
+    if (!aidFound) html += `<div>No aid shipments recorded.</div>`;
+
+    document.getElementById('output').innerHTML = html;
+}
+
+function copyToClipboard() {
+    const outputContainer = document.getElementById('output');
+    if (outputContainer.innerText.includes("Result will appear here")) {
+        alert("Please process logs before copying!");
+        return;
+    }
+    
+    // We copy innerText to ensure raw text (like links) degrades gracefully to just text for pasting into Discord/Game Mail.
+    navigator.clipboard.writeText(outputContainer.innerText).then(() => {
+        alert("Report copied to clipboard!");
+    }).catch(err => { alert("Failed to copy: " + err); });
+}
+</script>
+</body>
+</html>
     </style>
 </head>
 <body>
