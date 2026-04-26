@@ -125,7 +125,7 @@ function clearLogMemory() {
 // Initialize on page load
 window.onload = loadSettings;
 
-// --- PLANET LINK GENERATOR ---
+// --- PLANET LINK GENERATORS ---
 function createPlanetLink(planetStr, galaxyId) {
     if (!galaxyId) return `<span class="planet-info">${planetStr}</span>`; 
     
@@ -138,13 +138,31 @@ function createPlanetLink(planetStr, galaxyId) {
     return `<span class="planet-info">${planetStr}</span>`;
 }
 
+// Dedicated formatter for the Open Retakes section
+function createRetakeLink(planetStr, galaxyId) {
+    let match = planetStr.match(/planet (\d+) in the ([\d,\s]+) system/i);
+    if (match) {
+        let num = match[1];
+        let coords = match[2].replace(/\s/g, '');
+        let displayText = `${coords}:${num}`;
+        
+        if (galaxyId) {
+            let url = `https://imperialconflict.com/systems/view.php?galaxy=${galaxyId}&system=${coords}`;
+            return `<a href="${url}" target="_blank" class="planet-link">${displayText}</a>`;
+        }
+        return `<span class="planet-info">${displayText}</span>`;
+    }
+    // Fallback if the regex fails for some reason
+    return createPlanetLink(planetStr, galaxyId);
+}
+
 function processLogs() {
     const myEmpire = document.getElementById('usernameInput').value.trim().toLowerCase();
     const targetFamilyId = document.getElementById('familyIdInput').value.trim();
     const galaxyId = document.getElementById('galaxyIdInput').value.trim();
     const rawData = document.getElementById('logInput').value;
     
-    // 1. Clean the new lines to strip out garbage headers (like "EA    T-1679") so they match purely on the T-Tick
+    // 1. Clean the new lines to strip out garbage headers
     const newLines = rawData.split('\n')
         .map(l => l.trim())
         .filter(l => l)
@@ -175,8 +193,8 @@ function processLogs() {
     let myDefeats = [];
     let missingPlanets = new Set();
     let evolutions = [];
-    let aidShipments = []; // Array to store individual shipments with ticks
-    let aidTotals = {};    // Object to track the aggregated totals
+    let aidShipments = []; 
+    let aidTotals = {};    
 
     // 5. Parse the fully deduplicated logs
     finalLogsToProcess.forEach(cleanLine => {
@@ -221,10 +239,8 @@ function processLogs() {
             let resources = aidMatch[3];
             let receiver = aidMatch[4];
             
-            // Record individual shipment
             aidShipments.push(`<span class="tick">T-${tick}</span> <span class="emp-name">${sender}</span> sent ${resources} to <span class="emp-name">${receiver}</span>`);
 
-            // Add to totals
             if (!aidTotals[receiver]) aidTotals[receiver] = { Cash: 0, Food: 0, Iron: 0, Octarine: 0, Endurium: 0 };
             let resParts = resources.matchAll(/([\d,]+)\s+(Cash|Food|Iron|Endurium|Octarine)/ig);
             for (const part of resParts) {
@@ -257,7 +273,7 @@ function processLogs() {
     }
 
     html += `<br><hr><div class="section-header">OPEN RETAKES</div><hr>`;
-    Array.from(missingPlanets).sort().forEach(p => html += `<div>${createPlanetLink(p, galaxyId)}</div>`);
+    Array.from(missingPlanets).sort().forEach(p => html += `<div>${createRetakeLink(p, galaxyId)}</div>`);
     
     html += `<br><hr><div class="section-header">Empire Evolutions</div><hr>` + (evolutions.length ? `<div>${evolutions.join('<br>')}</div>` : '<div>No evolutions detected.</div>') + `<br>`;
 
