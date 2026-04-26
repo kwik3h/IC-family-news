@@ -25,24 +25,19 @@
         .output-container { background: #161b22; padding: 20px; border: 1px solid #30363d; border-radius: 6px; font-family: 'Courier New', Courier, monospace; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
         hr { border: none; border-top: 1px dashed #444; margin: 12px 0; }
         
-        /* Larger, bolder section headers */
         .section-header { font-weight: 900; font-size: 1.5em; color: #ffffff; letter-spacing: 1px; margin-top: 25px; margin-bottom: 15px; border-bottom: 2px solid #30363d; padding-bottom: 5px; }
         
-        /* Custom Colors for Resources */
         .res-Cash { color: #e3b341; font-weight: bold; }
         .res-Food { color: #d4a373; font-weight: bold; }
         .res-Iron { color: #a0aaba; font-weight: bold; }
         .res-Octarine { color: #b854d4; font-weight: bold; }
         .res-Endurium { color: #00bcd4; font-weight: bold; }
         
-        /* Formatting */
         .emp-name { color: #ff7b72; font-weight: bold; }
         .success-text { color: #3fb950; font-weight: bold; }
         .fail-text { color: #f85149; font-weight: bold; }
         .back-link { display: inline-block; margin-bottom: 20px; color: #58a6ff; text-decoration: none; font-size: 0.9em; }
         .back-link:hover { text-decoration: underline; }
-        
-        /* Clickable Planet Links */
         .planet-link { color: #d2a8ff; text-decoration: none; font-weight: bold; border-bottom: 1px dashed #d2a8ff; }
         .planet-link:hover { color: #e2c5ff; border-bottom: 1px solid #e2c5ff; }
     </style>
@@ -53,7 +48,7 @@
 
 <div>
     <h1>Infiltration Report Parser</h1>
-    <p>Paste raw infiltrated logs. Coordinates will become clickable if Galaxy ID is provided.</p>
+    <p>Paste raw infiltrated logs. Coordinates become clickable with Galaxy ID.</p>
 </div>
 
 <div class="input-group">
@@ -73,7 +68,6 @@
 <div id="output" class="output-container">Result will appear here...</div>
 
 <script>
-// --- SETTINGS STORAGE ---
 function saveSettings() {
     const settings = {
         username: document.getElementById('usernameInput').value,
@@ -81,7 +75,6 @@ function saveSettings() {
         galaxyId: document.getElementById('galaxyIdInput').value
     };
     localStorage.setItem('ic_infil_settings', JSON.stringify(settings));
-    
     const status = document.getElementById('saveStatus');
     status.innerText = "Settings saved...";
     setTimeout(() => { status.innerText = ""; }, 1500);
@@ -99,7 +92,6 @@ function loadSettings() {
 
 window.onload = loadSettings;
 
-// --- PLANET LINK GENERATOR ---
 function createPlanetLink(planetNum, x, y, galaxyId) {
     const label = `Planet ${planetNum} (${x}:${y})`;
     if (!galaxyId) return `<b>${label}</b>`;
@@ -126,7 +118,6 @@ function normalizeName(name) {
 function processLogs() {
     const rawData = document.getElementById('logInput').value;
     const galaxyId = document.getElementById('galaxyIdInput').value.trim();
-    
     const blocks = rawData.split(/(?=T-\d+:)/).map(b => b.trim()).filter(b => b);
 
     let units = {};
@@ -139,7 +130,6 @@ function processLogs() {
     let defenseFail = {};
 
     blocks.forEach(block => {
-        // --- UNITS ---
         if (block.includes("Construction completed")) {
             let match = block.match(/We have built ([\d,]+) (.*?)\./);
             if (match) {
@@ -148,8 +138,6 @@ function processLogs() {
                 units[name] = (units[name] || 0) + qty;
             }
         }
-        
-        // --- BUILDINGS ---
         else if (block.includes("Buildings complete")) {
             let match = block.match(/We have built ([\d,]+) (.*?) on/);
             if (match) {
@@ -158,8 +146,6 @@ function processLogs() {
                 buildings[name] = (buildings[name] || 0) + qty;
             }
         }
-        
-        // --- AID ---
         else if (block.includes("Aid shipment")) {
             let match = block.match(/We have received an aid shipment of (.*?) from (\w+)\./);
             if (match) {
@@ -173,8 +159,6 @@ function processLogs() {
                 }
             }
         }
-        
-        // --- FLEETS ---
         else if (block.includes("Destination reached")) {
             let match = block.match(/attack on planet (\d+) in the (\d+):(\d+) system/);
             if (match) {
@@ -182,17 +166,11 @@ function processLogs() {
                 fleets[link] = (fleets[link] || 0) + 1;
             }
         }
-        
-        // --- EXPLORATION ---
         else if (block.includes("Explored a planet")) exploredCount++;
-        
-        // --- PORTALS ---
         else if (block.includes("Portal completed")) {
             let match = block.match(/planet (\d+) in the (\d+),(\d+) system/);
             if (match) portals.push(createPlanetLink(match[1], match[2], match[3], galaxyId));
         }
-        
-        // --- DEFENSE REPORTS ---
         else if (block.includes("Defense Report")) {
             if (block.includes("fight the attackers off")) {
                 let match = block.match(/planet (\d+) at x:(\d+), y:(\d+) was attacked by (\w+) of family (\d+).*?In the fight (.*)/is);
@@ -215,71 +193,41 @@ function processLogs() {
     });
 
     let html = `<div style="font-weight: bold; margin-bottom: 10px;">Infiltration Summary Report</div>`;
-
     html += `<div class="section-header">Units Constructed</div>`;
     if (Object.keys(units).length > 0) {
         Object.keys(units).sort((a,b) => units[b] - units[a]).forEach(u => {
             html += `<div>* <b>${u}:</b> ${units[u].toLocaleString()}</div>`;
         });
-    } else { html += `<div>No units constructed.</div>`; }
-
+    }
     html += `<div class="section-header">Aid Received</div>`;
     const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
-    let aidFound = false;
     Object.keys(aidReceived).sort().forEach(sender => {
         let r = aidReceived[sender];
         let parts = [];
         resourceOrder.forEach(k => { if (r[k] > 0) parts.push(`<div>* <span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`); });
         if (parts.length > 0) {
-            aidFound = true;
             html += `<div style="margin-top: 15px;"><b>From <span class="emp-name">${sender}</span>:</b></div>` + parts.join('');
         }
     });
-    if (!aidFound) html += `<div>No aid received.</div>`;
-
-    html += `<div class="section-header">Defense Reports</div>`;
-    html += `<div class="success-text">Successful Defenses (${defenseSuccess.length}):</div>`;
+    html += `<div class="section-header">Defense Reports</div><div class="success-text">Successful Defenses (${defenseSuccess.length}):</div>`;
     defenseSuccess.forEach(d => html += `<div>* ${d}</div>`);
-    if (defenseSuccess.length === 0) html += `<div>None.</div>`;
-
     let failCount = Object.values(defenseFail).reduce((acc, arr) => acc + arr.length, 0);
     html += `<div class="fail-text" style="margin-top: 15px;">Failed Defenses (${failCount}):</div>`;
     Object.keys(defenseFail).forEach(attacker => {
         let incidents = defenseFail[attacker];
         html += `<div style="margin-top: 10px;">* <b>vs. <span class="emp-name">${attacker}</span>:</b> ${incidents.length} planet(s) lost.</div>`;
-        incidents.forEach(i => {
-            html += `<div style="margin-left: 20px;">- ${i.link}: ${i.result}</div>`;
-        });
+        incidents.forEach(i => { html += `<div style="margin-left: 20px;">- ${i.link}: ${i.result}</div>`; });
     });
-    if (failCount === 0) html += `<div>None.</div>`;
-
     html += `<div class="section-header">Fleet Movements</div>`;
-    if (Object.keys(fleets).length > 0) {
-        Object.keys(fleets).sort((a,b) => fleets[b] - fleets[a]).forEach(f => {
-            html += `<div>* ${f}: Targeted ${fleets[f]} time(s)</div>`;
-        });
-    } else { html += `<div>No fleets arrived.</div>`; }
-
-    html += `<div class="section-header">Planetary Development</div>`;
-    html += `<div><b>Exploration:</b> ${exploredCount} planet(s).</div>`;
-    html += `<div><b>Portals:</b> ${portals.length > 0 ? portals.join(", ") : "None"}.</div>`;
-    html += `<div style="margin-top: 10px;"><b>Buildings:</b></div>`;
-    Object.keys(buildings).sort((a,b) => buildings[b] - buildings[a]).forEach(b => {
-        html += `<div>* <b>${b}:</b> ${buildings[b].toLocaleString()}</div>`;
-    });
-
+    Object.keys(fleets).forEach(f => { html += `<div>* ${f}: Targeted ${fleets[f]} time(s)</div>`; });
+    html += `<div class="section-header">Planetary Development</div><div><b>Exploration:</b> ${exploredCount} planet(s).</div><div><b>Portals:</b> ${portals.length > 0 ? portals.join(", ") : "None"}.</div>`;
+    Object.keys(buildings).forEach(b => { html += `<div>* <b>${b}:</b> ${buildings[b].toLocaleString()}</div>`; });
     document.getElementById('output').innerHTML = html;
 }
 
 function copyToClipboard() {
     const outputContainer = document.getElementById('output');
-    if (outputContainer.innerText.includes("Result will appear here")) {
-        alert("Please process logs before copying!");
-        return;
-    }
-    navigator.clipboard.writeText(outputContainer.innerText).then(() => {
-        alert("Report copied to clipboard!");
-    }).catch(err => { alert("Failed to copy: " + err); });
+    navigator.clipboard.writeText(outputContainer.innerText).then(() => { alert("Report copied!"); });
 }
 </script>
 </body>
