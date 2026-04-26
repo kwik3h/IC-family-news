@@ -15,13 +15,16 @@
         input[type="text"], textarea { width: 100%; background: #010409; color: #58a6ff; border: 1px solid #30363d; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-family: monospace; box-sizing: border-box; }
         textarea { height: 250px; }
         
-        .btn-container { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
+        .btn-container { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
         button { background: #238636; color: white; border: 1px solid rgba(240,246,252,0.1); padding: 8px 16px; cursor: pointer; font-weight: bold; border-radius: 6px; transition: 0.2s; }
         button:hover { background: #2ea043; }
         .copy-btn { background: #1f6feb; }
         .copy-btn:hover { background: #388bfd; }
+        .clear-btn { background: #da3633; }
+        .clear-btn:hover { background: #f85149; }
         
         .save-status { color: #8b949e; font-size: 0.85em; font-style: italic; }
+        .memory-status { color: #3fb950; font-size: 0.9em; font-weight: bold; margin-bottom: 10px; display: block; }
         
         /* Output Box Styling */
         .output-container { background: #161b22; padding: 20px; border: 1px solid #30363d; border-radius: 6px; font-family: 'Courier New', Courier, monospace; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
@@ -36,7 +39,7 @@
         .res-Iron { color: #a0aaba; font-weight: bold; }
         .res-Octarine { color: #b854d4; font-weight: bold; }
         .res-Endurium { color: #00bcd4; font-weight: bold; }
-        .tick { color: #6e7681; }
+        .tick { color: #6e7681; font-weight: bold; }
         .emp-name { color: #ff7b72; font-weight: bold; }
         .attacker-name { color: #f85149; font-weight: bold; }
         .planet-info { color: #d2a8ff; }
@@ -52,7 +55,7 @@
 
 <div>
     <h1>Family News Parser</h1>
-    <p style="color: #8b949e; margin-top: 0;">Settings are automatically saved for your next visit. Add Galaxy ID to generate clickable planet links.</p>
+    <p style="color: #8b949e; margin-top: 0;">Settings and parsed logs are saved automatically to prevent duplicate entries.</p>
 </div>
 
 <div class="input-group">
@@ -60,18 +63,21 @@
     <input type="text" id="familyIdInput" placeholder="Target Family ID (e.g., 13757)" oninput="saveSettings()">
     <input type="text" id="galaxyIdInput" placeholder="Galaxy ID (e.g., 266)" oninput="saveSettings()">
 </div>
-<textarea id="logInput" placeholder="Paste your raw game logs here..."></textarea>
+
+<span id="memoryStatus" class="memory-status">Currently holding 0 log events in memory.</span>
+<textarea id="logInput" placeholder="Paste your raw game logs here. Old logs won't double up!"></textarea>
 
 <div class="btn-container">
     <button onclick="processLogs()">Process Logs</button>
-    <button class="copy-btn" onclick="copyToClipboard()">Copy Report to Clipboard</button>
+    <button class="copy-btn" onclick="copyToClipboard()">Copy Report</button>
+    <button class="clear-btn" onclick="clearLogMemory()">Clear Saved Logs</button>
     <span id="saveStatus" class="save-status"></span>
 </div>
 
 <div id="output" class="output-container">Result will appear here...</div>
 
 <script>
-// --- AUTO-SAVE LOGIC ---
+// --- AUTO-SAVE SETTINGS LOGIC ---
 function saveSettings() {
     const settings = {
         username: document.getElementById('usernameInput').value,
@@ -79,11 +85,6 @@ function saveSettings() {
         galaxyId: document.getElementById('galaxyIdInput').value
     };
     localStorage.setItem('ic_news_settings', JSON.stringify(settings));
-    
-    // Quick visual cue that it saved
-    const status = document.getElementById('saveStatus');
-    status.innerText = "Settings saved...";
-    setTimeout(() => { status.innerText = ""; }, 1500);
 }
 
 function loadSettings() {
@@ -94,6 +95,31 @@ function loadSettings() {
         document.getElementById('familyIdInput').value = settings.familyId || "";
         document.getElementById('galaxyIdInput').value = settings.galaxyId || "";
     }
+    updateMemoryStatus();
+}
+
+// --- LOG MEMORY (DEDUPLICATION) LOGIC ---
+function getStoredLogs() {
+    const saved = localStorage.getItem('ic_news_log_history');
+    return saved ? JSON.parse(saved) : [];
+}
+
+function updateMemoryStatus() {
+    const stored = getStoredLogs();
+    document.getElementById('memoryStatus').innerText = `Currently holding ${stored.length} unique log events in memory.`;
+}
+
+function clearLogMemory() {
+    if(confirm("Are you sure you want to clear the saved logs memory? This will reset your report.")) {
+        localStorage.removeItem('ic_news_log_history');
+        document.getElementById('logInput').value = "";
+        document.getElementById('output').innerHTML = "Result will appear here...";
+        updateMemoryStatus();
+        
+        const status = document.getElementById('saveStatus');
+        status.innerText = "Memory cleared.";
+        setTimeout(() => { status.innerText = ""; }, 2000);
+    }
 }
 
 // Initialize on page load
@@ -101,12 +127,11 @@ window.onload = loadSettings;
 
 // --- PLANET LINK GENERATOR ---
 function createPlanetLink(planetStr, galaxyId) {
-    if (!galaxyId) return `<span class="planet-info">${planetStr}</span>`; // Fallback if no Galaxy ID is entered
+    if (!galaxyId) return `<span class="planet-info">${planetStr}</span>`; 
     
-    // Extract coordinates like "73,13" from the string
     let coordMatch = planetStr.match(/(\d+,\s*\d+)/);
     if (coordMatch) {
-        let coords = coordMatch[1].replace(/\s/g, ''); // Removes spaces to ensure format is "73,13"
+        let coords = coordMatch[1].replace(/\s/g, ''); 
         let url = `https://imperialconflict.com/systems/view.php?galaxy=${galaxyId}&system=${coords}`;
         return `<a href="${url}" target="_blank" class="planet-link">${planetStr}</a>`;
     }
@@ -119,8 +144,30 @@ function processLogs() {
     const galaxyId = document.getElementById('galaxyIdInput').value.trim();
     const rawData = document.getElementById('logInput').value;
     
-    const lines = rawData.split('\n').map(l => l.trim()).filter(l => l);
+    // 1. Clean the new lines to strip out garbage headers (like "EA    T-1679") so they match purely on the T-Tick
+    const newLines = rawData.split('\n')
+        .map(l => l.trim())
+        .filter(l => l)
+        .map(l => {
+            let tickMatch = l.match(/(T-\d+\s+.*)/);
+            return tickMatch ? tickMatch[1] : l;
+        });
+
+    // 2. Fetch old logs and merge with new ones using a Set to remove exact duplicates
+    const storedLogs = getStoredLogs();
+    const allUniqueLogsSet = new Set([...storedLogs, ...newLines]);
+    const finalLogsToProcess = Array.from(allUniqueLogsSet);
     
+    // 3. Save the merged, deduplicated list back to local storage
+    localStorage.setItem('ic_news_log_history', JSON.stringify(finalLogsToProcess));
+    updateMemoryStatus();
+    
+    // UI feedback
+    const status = document.getElementById('saveStatus');
+    status.innerText = "Logs processed & saved...";
+    setTimeout(() => { status.innerText = ""; }, 1500);
+
+    // 4. Initialize Data Trackers
     let explored = 0;
     let familyCaptures = [];
     let myCaptures = [];
@@ -128,16 +175,15 @@ function processLogs() {
     let myDefeats = [];
     let missingPlanets = new Set();
     let evolutions = [];
-    let aidReceived = {};
+    let aidShipments = []; // Array to store individual shipments with ticks
+    let aidTotals = {};    // Object to track the aggregated totals
 
-    lines.forEach(line => {
-        // Clean prefixes like "EA" or extra tabs often found in raw news copy-pastes
-        const cleanLine = line.replace(/^[A-Z]+\s+/, '');
-
+    // 5. Parse the fully deduplicated logs
+    finalLogsToProcess.forEach(cleanLine => {
+        
         if (cleanLine.toLowerCase().includes("explored planet")) explored++;
 
         // --- CAPTURE LOGIC ---
-        // Format: The forces of [Name] took [Planet] from [Enemy] ([ID])
         let capRegex = new RegExp(`T-(\\d+)\\s+The forces of (\\w+) took (planet \\d+ in the [\\d, ]+ system) from (.*?)\\s*\\((${targetFamilyId || '\\d+'})\\)`, "i");
         let capMatch = cleanLine.match(capRegex);
         
@@ -149,7 +195,6 @@ function processLogs() {
         }
 
         // --- DEFEAT/LOSS LOGIC ---
-        // Format: After a brave fight our family member [Name] had to flee the [Planet] which was attacked by [Attacker] of family [ID]
         let defRegex = new RegExp(`T-(\\d+)\\s+After a brave fight our family member (\\w+) had to flee the (?:planet\\s+)?(planet \\d+ in the [\\d, ]+ system) which was attacked by (.*?) of family (${targetFamilyId || '\\d+'})`, "i");
         let defMatch = cleanLine.match(defRegex);
 
@@ -159,7 +204,6 @@ function processLogs() {
             if (myEmpire !== "" && defMatch[2].toLowerCase() === myEmpire) myDefeats.push(entry);
             else familyDefeats.push(entry);
             
-            // Store the raw string for the missing list (links are generated at the end)
             missingPlanets.add(defMatch[3]);
         }
 
@@ -172,18 +216,25 @@ function processLogs() {
         // --- AID LOGIC ---
         let aidMatch = cleanLine.match(/T-(\d+)\s+(?:In the name of cooperation\s+)?(\w+) has sent a shipment of (.*?) to (\w+)/);
         if (aidMatch) {
-            let receiver = aidMatch[4];
+            let tick = aidMatch[1];
+            let sender = aidMatch[2];
             let resources = aidMatch[3];
-            if (!aidReceived[receiver]) aidReceived[receiver] = { Cash: 0, Food: 0, Iron: 0, Octarine: 0, Endurium: 0 };
+            let receiver = aidMatch[4];
+            
+            // Record individual shipment
+            aidShipments.push(`<span class="tick">T-${tick}</span> <span class="emp-name">${sender}</span> sent ${resources} to <span class="emp-name">${receiver}</span>`);
+
+            // Add to totals
+            if (!aidTotals[receiver]) aidTotals[receiver] = { Cash: 0, Food: 0, Iron: 0, Octarine: 0, Endurium: 0 };
             let resParts = resources.matchAll(/([\d,]+)\s+(Cash|Food|Iron|Endurium|Octarine)/ig);
             for (const part of resParts) {
                 let type = part[2].charAt(0).toUpperCase() + part[2].slice(1).toLowerCase(); 
-                aidReceived[receiver][type] += parseInt(part[1].replace(/,/g, ''));
+                aidTotals[receiver][type] += parseInt(part[1].replace(/,/g, ''));
             }
         }
     });
 
-    // BUILDING THE HTML
+    // 6. BUILDING THE HTML
     let html = `<div style="font-weight: bold; margin-bottom: 10px;">Imperial Intelligence Report</div>`;
     
     html += `<hr><div class="section-header">Exploration</div><hr><div>${explored} planet(s) Explored.</div><br>`;
@@ -210,19 +261,25 @@ function processLogs() {
     
     html += `<br><hr><div class="section-header">Empire Evolutions</div><hr>` + (evolutions.length ? `<div>${evolutions.join('<br>')}</div>` : '<div>No evolutions detected.</div>') + `<br>`;
 
-    html += `<hr><div class="section-header">- Aid Received (Totals) -</div><hr>`;
-    const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
-    let aidFound = false;
-    Object.keys(aidReceived).sort().forEach(name => {
-        let r = aidReceived[name];
-        let parts = [];
-        resourceOrder.forEach(k => { if (r[k] > 0) parts.push(`<div><span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`); });
-        if (parts.length > 0) {
-            aidFound = true;
-            html += `<div style="margin-top: 20px;">To <span class="emp-name">${name}</span>:</div>` + parts.join('');
-        }
-    });
-    if (!aidFound) html += `<div>No aid shipments recorded.</div>`;
+    html += `<hr><div class="section-header">- Aid Shipments & Totals -</div><hr>`;
+    
+    if (aidShipments.length > 0) {
+        html += `<div style="margin-bottom: 15px;"><b>Individual Shipments:</b></div>`;
+        html += `<div>${aidShipments.join('<br>')}</div><br>`;
+        
+        html += `<div style="margin-bottom: 10px;"><b>Total Aid Received:</b></div>`;
+        const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
+        Object.keys(aidTotals).sort().forEach(name => {
+            let r = aidTotals[name];
+            let parts = [];
+            resourceOrder.forEach(k => { if (r[k] > 0) parts.push(`<div><span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`); });
+            if (parts.length > 0) {
+                html += `<div style="margin-top: 10px;">To <span class="emp-name">${name}</span>:</div>` + parts.join('');
+            }
+        });
+    } else {
+        html += `<div>No aid shipments recorded.</div>`;
+    }
 
     document.getElementById('output').innerHTML = html;
 }
@@ -233,8 +290,6 @@ function copyToClipboard() {
         alert("Please process logs before copying!");
         return;
     }
-    
-    // We copy innerText to ensure raw text (like links) degrades gracefully to just text for pasting into Discord/Game Mail.
     navigator.clipboard.writeText(outputContainer.innerText).then(() => {
         alert("Report copied to clipboard!");
     }).catch(err => { alert("Failed to copy: " + err); });
