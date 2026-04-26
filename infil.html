@@ -3,14 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Family News Parser - Imperial Conflict</title>
+    <title>Infiltration Report Parser - Imperial Conflict</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0d1117; color: #c9d1d9; padding: 20px; }
         h1 { color: #58a6ff; margin-bottom: 5px; }
-        .back-link { display: inline-block; margin-bottom: 20px; color: #58a6ff; text-decoration: none; font-size: 0.9em; }
-        .back-link:hover { text-decoration: underline; }
+        p { color: #8b949e; }
         
-        /* Input Styling */
         .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
         input[type="text"], textarea { width: 100%; background: #010409; color: #58a6ff; border: 1px solid #30363d; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-family: monospace; box-sizing: border-box; }
         textarea { height: 250px; }
@@ -27,19 +25,22 @@
         .output-container { background: #161b22; padding: 20px; border: 1px solid #30363d; border-radius: 6px; font-family: 'Courier New', Courier, monospace; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
         hr { border: none; border-top: 1px dashed #444; margin: 12px 0; }
         
-        /* Section headers */
-        .section-header { text-align: center; font-weight: 900; font-size: 1.5em; color: #ffffff; letter-spacing: 1px; margin-top: 25px; margin-bottom: 15px; }
+        /* Larger, bolder section headers */
+        .section-header { font-weight: 900; font-size: 1.5em; color: #ffffff; letter-spacing: 1px; margin-top: 25px; margin-bottom: 15px; border-bottom: 2px solid #30363d; padding-bottom: 5px; }
         
-        /* Colors for the report */
+        /* Custom Colors for Resources */
         .res-Cash { color: #e3b341; font-weight: bold; }
         .res-Food { color: #d4a373; font-weight: bold; }
         .res-Iron { color: #a0aaba; font-weight: bold; }
         .res-Octarine { color: #b854d4; font-weight: bold; }
         .res-Endurium { color: #00bcd4; font-weight: bold; }
-        .tick { color: #6e7681; }
+        
+        /* Formatting */
         .emp-name { color: #ff7b72; font-weight: bold; }
-        .attacker-name { color: #f85149; font-weight: bold; }
-        .planet-info { color: #d2a8ff; }
+        .success-text { color: #3fb950; font-weight: bold; }
+        .fail-text { color: #f85149; font-weight: bold; }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #58a6ff; text-decoration: none; font-size: 0.9em; }
+        .back-link:hover { text-decoration: underline; }
         
         /* Clickable Planet Links */
         .planet-link { color: #d2a8ff; text-decoration: none; font-weight: bold; border-bottom: 1px dashed #d2a8ff; }
@@ -51,16 +52,17 @@
 <a href="index.html" class="back-link">← Back to Tools Index</a>
 
 <div>
-    <h1>Family News Parser</h1>
-    <p style="color: #8b949e; margin-top: 0;">Settings are automatically saved for your next visit. Add Galaxy ID to generate clickable planet links.</p>
+    <h1>Infiltration Report Parser</h1>
+    <p>Paste raw infiltrated logs. Coordinates will become clickable if Galaxy ID is provided.</p>
 </div>
 
 <div class="input-group">
-    <input type="text" id="usernameInput" placeholder="Your Empire Name (e.g., Jealous)" oninput="saveSettings()">
-    <input type="text" id="familyIdInput" placeholder="Target Family ID (e.g., 13757)" oninput="saveSettings()">
+    <input type="text" id="usernameInput" placeholder="Your Empire Name" oninput="saveSettings()">
+    <input type="text" id="familyIdInput" placeholder="Target Family ID" oninput="saveSettings()">
     <input type="text" id="galaxyIdInput" placeholder="Galaxy ID (e.g., 266)" oninput="saveSettings()">
 </div>
-<textarea id="logInput" placeholder="Paste your raw game logs here..."></textarea>
+
+<textarea id="logInput" placeholder="Paste your raw infiltrated game logs here..."></textarea>
 
 <div class="btn-container">
     <button onclick="processLogs()">Process Logs</button>
@@ -71,23 +73,22 @@
 <div id="output" class="output-container">Result will appear here...</div>
 
 <script>
-// --- AUTO-SAVE LOGIC ---
+// --- SETTINGS STORAGE ---
 function saveSettings() {
     const settings = {
         username: document.getElementById('usernameInput').value,
         familyId: document.getElementById('familyIdInput').value,
         galaxyId: document.getElementById('galaxyIdInput').value
     };
-    localStorage.setItem('ic_news_settings', JSON.stringify(settings));
+    localStorage.setItem('ic_infil_settings', JSON.stringify(settings));
     
-    // Quick visual cue that it saved
     const status = document.getElementById('saveStatus');
     status.innerText = "Settings saved...";
     setTimeout(() => { status.innerText = ""; }, 1500);
 }
 
 function loadSettings() {
-    const saved = localStorage.getItem('ic_news_settings');
+    const saved = localStorage.getItem('ic_infil_settings');
     if (saved) {
         const settings = JSON.parse(saved);
         document.getElementById('usernameInput').value = settings.username || "";
@@ -96,190 +97,36 @@ function loadSettings() {
     }
 }
 
-// Initialize on page load
 window.onload = loadSettings;
 
 // --- PLANET LINK GENERATOR ---
-function createPlanetLink(planetStr, galaxyId) {
-    if (!galaxyId) return `<span class="planet-info">${planetStr}</span>`; // Fallback if no Galaxy ID is entered
-    
-    // Extract coordinates like "73,13" from the string
-    let coordMatch = planetStr.match(/(\d+,\s*\d+)/);
-    if (coordMatch) {
-        let coords = coordMatch[1].replace(/\s/g, ''); // Removes spaces to ensure format is "73,13"
-        let url = `https://imperialconflict.com/systems/view.php?galaxy=${galaxyId}&system=${coords}`;
-        return `<a href="${url}" target="_blank" class="planet-link">${planetStr}</a>`;
-    }
-    return `<span class="planet-info">${planetStr}</span>`;
+function createPlanetLink(planetNum, x, y, galaxyId) {
+    const label = `Planet ${planetNum} (${x}:${y})`;
+    if (!galaxyId) return `<b>${label}</b>`;
+    const url = `https://imperialconflict.com/systems/view.php?galaxy=${galaxyId}&system=${x},${y}`;
+    return `<a href="${url}" target="_blank" class="planet-link">${label}</a>`;
 }
 
-function processLogs() {
-    const myEmpire = document.getElementById('usernameInput').value.trim().toLowerCase();
-    const targetFamilyId = document.getElementById('familyIdInput').value.trim();
-    const galaxyId = document.getElementById('galaxyIdInput').value.trim();
-    const rawData = document.getElementById('logInput').value;
-    
-    const lines = rawData.split('\n').map(l => l.trim()).filter(l => l);
-    
-    let explored = 0;
-    let familyCaptures = [];
-    let myCaptures = [];
-    let familyDefeats = [];
-    let myDefeats = [];
-    let missingPlanets = new Set();
-    let evolutions = [];
-    let aidReceived = {};
-
-    lines.forEach(line => {
-        // Clean prefixes like "EA" or extra tabs often found in raw news copy-pastes
-        const cleanLine = line.replace(/^[A-Z]+\s+/, '');
-
-        if (cleanLine.toLowerCase().includes("explored planet")) explored++;
-
-        // --- CAPTURE LOGIC ---
-        // Format: The forces of [Name] took [Planet] from [Enemy] ([ID])
-        let capRegex = new RegExp(`T-(\\d+)\\s+The forces of (\\w+) took (planet \\d+ in the [\\d, ]+ system) from (.*?)\\s*\\((${targetFamilyId || '\\d+'})\\)`, "i");
-        let capMatch = cleanLine.match(capRegex);
-        
-        if (capMatch) {
-            let linkedPlanet = createPlanetLink(capMatch[3], galaxyId);
-            let entry = `<span class="tick">T-${capMatch[1]}</span> <span class="emp-name">${capMatch[2]}</span> took ${linkedPlanet} from ${capMatch[4]}.`;
-            if (myEmpire !== "" && capMatch[2].toLowerCase() === myEmpire) myCaptures.push(entry);
-            else familyCaptures.push(entry);
-        }
-
-        // --- DEFEAT/LOSS LOGIC ---
-        // Format: After a brave fight our family member [Name] had to flee the [Planet] which was attacked by [Attacker] of family [ID]
-        let defRegex = new RegExp(`T-(\\d+)\\s+After a brave fight our family member (\\w+) had to flee the (?:planet\\s+)?(planet \\d+ in the [\\d, ]+ system) which was attacked by (.*?) of family (${targetFamilyId || '\\d+'})`, "i");
-        let defMatch = cleanLine.match(defRegex);
-
-        if (defMatch) {
-            let linkedPlanet = createPlanetLink(defMatch[3], galaxyId);
-            let entry = `<span class="tick">T-${defMatch[1]}</span> <span class="emp-name">${defMatch[2]}</span> lost ${linkedPlanet} to <span class="attacker-name">${defMatch[4]}</span> (Family ${defMatch[5]}).`;
-            if (myEmpire !== "" && defMatch[2].toLowerCase() === myEmpire) myDefeats.push(entry);
-            else familyDefeats.push(entry);
-            
-            // Store the raw string for the missing list (links are generated at the end)
-            missingPlanets.add(defMatch[3]);
-        }
-
-        // --- EVOLUTION LOGIC ---
-        let evoMatch = cleanLine.match(/T-(\d+)\s+(\w+) evolved to an empire of (.*?)\./);
-        if (evoMatch) {
-            evolutions.push(`<span class="tick">T-${evoMatch[1]}</span> <span class="emp-name">${evoMatch[2]}</span> evolved to <b>${evoMatch[3]}</b>.`);
-        }
-
-        // --- AID LOGIC ---
-        let aidMatch = cleanLine.match(/T-(\d+)\s+(?:In the name of cooperation\s+)?(\w+) has sent a shipment of (.*?) to (\w+)/);
-        if (aidMatch) {
-            let receiver = aidMatch[4];
-            let resources = aidMatch[3];
-            if (!aidReceived[receiver]) aidReceived[receiver] = { Cash: 0, Food: 0, Iron: 0, Octarine: 0, Endurium: 0 };
-            let resParts = resources.matchAll(/([\d,]+)\s+(Cash|Food|Iron|Endurium|Octarine)/ig);
-            for (const part of resParts) {
-                let type = part[2].charAt(0).toUpperCase() + part[2].slice(1).toLowerCase(); 
-                aidReceived[receiver][type] += parseInt(part[1].replace(/,/g, ''));
-            }
-        }
-    });
-
-    // BUILDING THE HTML
-    let html = `<div style="font-weight: bold; margin-bottom: 10px;">Imperial Intelligence Report</div>`;
-    
-    html += `<hr><div class="section-header">Exploration</div><hr><div>${explored} planet(s) Explored.</div><br>`;
-    
-    html += `<hr><div class="section-header">Captures (Takes)</div><hr>`;
-    if (myCaptures.length) html += `<div><b>Your Captures:</b><br>${myCaptures.join('<br>')}</div><br>`;
-    if (familyCaptures.length) html += `<div><b>Family Captures:</b><br>${familyCaptures.join('<br>')}</div><br>`;
-    if (!myCaptures.length && !familyCaptures.length) html += `<div>No captures found.</div><br>`;
-    
-    html += `<hr><div class="section-header">Defeats (Lost Planets)</div><hr>`;
-    if (myDefeats.length) html += `<div><b>Your Losses:</b><br>${myDefeats.join('<br>')}</div><br>`;
-    if (familyDefeats.length) html += `<div><b>Family Losses:</b><br>${familyDefeats.join('<br>')}</div><br>`;
-    if (!myDefeats.length && !familyDefeats.length) html += `<div>No defeats found.</div><br>`;
-    
-    html += `<hr><div class="section-header">Summary of Unique Planets Lost</div><hr>`;
-    if (missingPlanets.size > 0) {
-        Array.from(missingPlanets).sort().forEach(p => html += `<div>* ${createPlanetLink(p, galaxyId)}</div>`);
-    } else {
-        html += `<div>No missing planets tracked.</div>`;
-    }
-
-    html += `<br><hr><div class="section-header">OPEN RETAKES</div><hr>`;
-    Array.from(missingPlanets).sort().forEach(p => html += `<div>${createPlanetLink(p, galaxyId)}</div>`);
-    
-    html += `<br><hr><div class="section-header">Empire Evolutions</div><hr>` + (evolutions.length ? `<div>${evolutions.join('<br>')}</div>` : '<div>No evolutions detected.</div>') + `<br>`;
-
-    html += `<hr><div class="section-header">- Aid Received (Totals) -</div><hr>`;
-    const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
-    let aidFound = false;
-    Object.keys(aidReceived).sort().forEach(name => {
-        let r = aidReceived[name];
-        let parts = [];
-        resourceOrder.forEach(k => { if (r[k] > 0) parts.push(`<div><span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`); });
-        if (parts.length > 0) {
-            aidFound = true;
-            html += `<div style="margin-top: 20px;">To <span class="emp-name">${name}</span>:</div>` + parts.join('');
-        }
-    });
-    if (!aidFound) html += `<div>No aid shipments recorded.</div>`;
-
-    document.getElementById('output').innerHTML = html;
-}
-
-function copyToClipboard() {
-    const outputContainer = document.getElementById('output');
-    if (outputContainer.innerText.includes("Result will appear here")) {
-        alert("Please process logs before copying!");
-        return;
-    }
-    
-    // We copy innerText to ensure raw text (like links) degrades gracefully to just text for pasting into Discord/Game Mail.
-    navigator.clipboard.writeText(outputContainer.innerText).then(() => {
-        alert("Report copied to clipboard!");
-    }).catch(err => { alert("Failed to copy: " + err); });
-}
-</script>
-</body>
-</html>
-    </style>
-</head>
-<body>
-
-<div>
-    <h1>Infiltration Report Parser</h1>
-    <p>Paste raw infiltrated logs. Formats Units, Aid, Defenses, Fleets, and Buildings.</p>
-</div>
-
-<textarea id="logInput" placeholder="Paste your raw infiltrated game logs here..."></textarea>
-
-<div class="btn-container">
-    <button onclick="processLogs()">Process Logs</button>
-    <button class="copy-btn" onclick="copyToClipboard()">Copy Report to Clipboard</button>
-</div>
-
-<div id="output" class="output-container">Result will appear here...</div>
-
-<script>
-// Helper to standardize plurals for clean grouping
 function normalizeName(name) {
     name = name.trim();
-    if (name === "Exploration Ship") return "Exploration Ships";
-    if (name === "Laser") return "Lasers";
-    if (name === "Mining facility") return "Mining Facilities";
-    if (name === "Refinement station") return "Refinement Stations";
-    if (name === "Research center") return "Research Centers";
-    if (name === "Hydroponic farm") return "Hydroponic Farms";
-    if (name === "Occult center") return "Occult Centers";
+    const mapping = {
+        "Exploration Ship": "Exploration Ships",
+        "Laser": "Lasers",
+        "Mining facility": "Mining Facilities",
+        "Refinement station": "Refinement Stations",
+        "Research center": "Research Centers",
+        "Hydroponic farm": "Hydroponic Farms",
+        "Occult center": "Occult Centers"
+    };
+    if (mapping[name]) return mapping[name];
     if (!name.endsWith("s")) return name + "s";
     return name;
 }
 
 function processLogs() {
     const rawData = document.getElementById('logInput').value;
+    const galaxyId = document.getElementById('galaxyIdInput').value.trim();
     
-    // Split the logs into distinct blocks separated by "T-XXX:"
-    // This keeps multiline defense reports grouped together
     const blocks = rawData.split(/(?=T-\d+:)/).map(b => b.trim()).filter(b => b);
 
     let units = {};
@@ -288,10 +135,8 @@ function processLogs() {
     let fleets = {};
     let exploredCount = 0;
     let portals = [];
-    
-    // Defense tracking
     let defenseSuccess = [];
-    let defenseFail = {}; // Grouped by attacker
+    let defenseFail = {};
 
     blocks.forEach(block => {
         // --- UNITS ---
@@ -321,7 +166,6 @@ function processLogs() {
                 let sender = match[2];
                 let resources = match[1];
                 if (!aidReceived[sender]) aidReceived[sender] = { Cash: 0, Food: 0, Iron: 0, Octarine: 0, Endurium: 0 };
-                
                 let resParts = resources.matchAll(/([\d,]+)\s+(Cash|Food|Iron|Endurium|Octarine)/ig);
                 for (const part of resParts) {
                     let type = part[2].charAt(0).toUpperCase() + part[2].slice(1).toLowerCase(); 
@@ -334,143 +178,95 @@ function processLogs() {
         else if (block.includes("Destination reached")) {
             let match = block.match(/attack on planet (\d+) in the (\d+):(\d+) system/);
             if (match) {
-                let target = `${match[2]}:${match[3]} (Planet ${match[1]})`;
-                fleets[target] = (fleets[target] || 0) + 1;
+                let link = createPlanetLink(match[1], match[2], match[3], galaxyId);
+                fleets[link] = (fleets[link] || 0) + 1;
             }
         }
         
         // --- EXPLORATION ---
-        else if (block.includes("Explored a planet")) {
-            exploredCount++;
-        }
+        else if (block.includes("Explored a planet")) exploredCount++;
         
         // --- PORTALS ---
         else if (block.includes("Portal completed")) {
             let match = block.match(/planet (\d+) in the (\d+),(\d+) system/);
-            if (match) {
-                portals.push(`${match[2]}:${match[3]} (Planet ${match[1]})`);
-            }
+            if (match) portals.push(createPlanetLink(match[1], match[2], match[3], galaxyId));
         }
         
         // --- DEFENSE REPORTS ---
         else if (block.includes("Defense Report")) {
-            // Success
             if (block.includes("fight the attackers off")) {
                 let match = block.match(/planet (\d+) at x:(\d+), y:(\d+) was attacked by (\w+) of family (\d+).*?In the fight (.*)/is);
                 if (match) {
-                    defenseSuccess.push(`Planet ${match[1]} in ${match[2]}:${match[3]} defended against ${match[4]} (Family ${match[5]}). ${match[6].trim()}`);
+                    let link = createPlanetLink(match[1], match[2], match[3], galaxyId);
+                    defenseSuccess.push(`${link} defended against ${match[4]} (Family ${match[5]}). ${match[6].trim()}`);
                 }
             } 
-            // Failed
             else if (block.includes("flee the planet")) {
                 let match = block.match(/planet (\d+) at x:(\d+), y:(\d+) was attacked by (\w+) of family (\d+).*?flee the planet\.(.*)/is);
                 if (match) {
                     let attacker = `${match[4]} (Family ${match[5]})`;
-                    let loc = `${match[2]}:${match[3]}`;
+                    let link = createPlanetLink(match[1], match[2], match[3], galaxyId);
                     let result = match[6].trim();
-                    
                     if (!defenseFail[attacker]) defenseFail[attacker] = [];
-                    defenseFail[attacker].push({ loc: loc, planet: match[1], result: result });
+                    defenseFail[attacker].push({ link: link, result: result });
                 }
             }
         }
     });
 
-    // ==========================================
-    // BUILDING THE HTML OUTPUT
-    // ==========================================
-    let html = ``;
+    let html = `<div style="font-weight: bold; margin-bottom: 10px;">Infiltration Summary Report</div>`;
 
-    // 1. UNITS
     html += `<div class="section-header">Units Constructed</div>`;
     if (Object.keys(units).length > 0) {
         Object.keys(units).sort((a,b) => units[b] - units[a]).forEach(u => {
             html += `<div>* <b>${u}:</b> ${units[u].toLocaleString()}</div>`;
         });
-    } else {
-        html += `<div>No units constructed.</div>`;
-    }
+    } else { html += `<div>No units constructed.</div>`; }
 
-    // 2. AID RECEIVED
     html += `<div class="section-header">Aid Received</div>`;
     const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
     let aidFound = false;
-    
     Object.keys(aidReceived).sort().forEach(sender => {
         let r = aidReceived[sender];
         let parts = [];
-        resourceOrder.forEach(k => {
-            if (r[k] > 0) {
-                parts.push(`<div>* <span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`);
-            }
-        });
+        resourceOrder.forEach(k => { if (r[k] > 0) parts.push(`<div>* <span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`); });
         if (parts.length > 0) {
             aidFound = true;
-            html += `<div style="margin-top: 15px;"><b>From <span class="emp-name">${sender}</span>:</b></div>`;
-            html += parts.join('');
+            html += `<div style="margin-top: 15px;"><b>From <span class="emp-name">${sender}</span>:</b></div>` + parts.join('');
         }
     });
     if (!aidFound) html += `<div>No aid received.</div>`;
 
-    // 3. DEFENSE REPORTS
     html += `<div class="section-header">Defense Reports</div>`;
-    
-    html += `<div class="success-text" style="margin-bottom: 5px;">Successful Defenses (${defenseSuccess.length}):</div>`;
-    if (defenseSuccess.length > 0) {
-        defenseSuccess.forEach(d => html += `<div>* ${d}</div>`);
-    } else {
-        html += `<div>None.</div>`;
-    }
+    html += `<div class="success-text">Successful Defenses (${defenseSuccess.length}):</div>`;
+    defenseSuccess.forEach(d => html += `<div>* ${d}</div>`);
+    if (defenseSuccess.length === 0) html += `<div>None.</div>`;
 
     let failCount = Object.values(defenseFail).reduce((acc, arr) => acc + arr.length, 0);
-    html += `<div class="fail-text" style="margin-top: 15px; margin-bottom: 5px;">Failed Defenses (${failCount}):</div>`;
-    if (failCount > 0) {
-        Object.keys(defenseFail).forEach(attacker => {
-            let incidents = defenseFail[attacker];
-            let sysList = incidents.map(i => i.loc).filter((v, i, a) => a.indexOf(v) === i).join(", ");
-            html += `<div style="margin-top: 10px;">* <b>vs. <span class="emp-name">${attacker}</span>:</b> ${incidents.length} planet(s) lost (Systems ${sysList}).</div>`;
-            
-            // List unique losses (e.g. "At least we didn't lose a single unit" vs "lost 1 laser")
-            let losses = incidents.map(i => i.result).filter((v, i, a) => a.indexOf(v) === i);
-            losses.forEach(l => {
-                if(l) html += `<div style="margin-left: 20px; color: #8b949e;">- ${l}</div>`;
-            });
+    html += `<div class="fail-text" style="margin-top: 15px;">Failed Defenses (${failCount}):</div>`;
+    Object.keys(defenseFail).forEach(attacker => {
+        let incidents = defenseFail[attacker];
+        html += `<div style="margin-top: 10px;">* <b>vs. <span class="emp-name">${attacker}</span>:</b> ${incidents.length} planet(s) lost.</div>`;
+        incidents.forEach(i => {
+            html += `<div style="margin-left: 20px;">- ${i.link}: ${i.result}</div>`;
         });
-    } else {
-        html += `<div>None.</div>`;
-    }
+    });
+    if (failCount === 0) html += `<div>None.</div>`;
 
-    // 4. FLEETS
-    html += `<div class="section-header">Fleet Movements (Attacks Initiated)</div>`;
-    html += `<div>Fleets have reached their destinations to attack the following coordinates:</div>`;
+    html += `<div class="section-header">Fleet Movements</div>`;
     if (Object.keys(fleets).length > 0) {
         Object.keys(fleets).sort((a,b) => fleets[b] - fleets[a]).forEach(f => {
-            html += `<div>* <b>${f}:</b> Targeted ${fleets[f]} time(s)</div>`;
+            html += `<div>* ${f}: Targeted ${fleets[f]} time(s)</div>`;
         });
-    } else {
-        html += `<div>No fleets arrived.</div>`;
-    }
+    } else { html += `<div>No fleets arrived.</div>`; }
 
-    // 5. PLANETARY DEV
     html += `<div class="section-header">Planetary Development</div>`;
-    html += `<div><b>Exploration:</b></div>`;
-    html += `<div>* ${exploredCount} planet(s) were successfully explored.</div><br>`;
-    
-    html += `<div><b>Portals Completed (${portals.length}):</b></div>`;
-    if (portals.length > 0) {
-        html += `<div>* Systems: ${portals.join(", ")}</div><br>`;
-    } else {
-        html += `<div>* 0 Portals built.</div><br>`;
-    }
-
-    html += `<div><b>Buildings Constructed:</b></div>`;
-    if (Object.keys(buildings).length > 0) {
-        Object.keys(buildings).sort((a,b) => buildings[b] - buildings[a]).forEach(b => {
-            html += `<div>* <b>${b}:</b> ${buildings[b].toLocaleString()}</div>`;
-        });
-    } else {
-        html += `<div>* No buildings constructed.</div>`;
-    }
+    html += `<div><b>Exploration:</b> ${exploredCount} planet(s).</div>`;
+    html += `<div><b>Portals:</b> ${portals.length > 0 ? portals.join(", ") : "None"}.</div>`;
+    html += `<div style="margin-top: 10px;"><b>Buildings:</b></div>`;
+    Object.keys(buildings).sort((a,b) => buildings[b] - buildings[a]).forEach(b => {
+        html += `<div>* <b>${b}:</b> ${buildings[b].toLocaleString()}</div>`;
+    });
 
     document.getElementById('output').innerHTML = html;
 }
@@ -482,12 +278,9 @@ function copyToClipboard() {
         return;
     }
     navigator.clipboard.writeText(outputContainer.innerText).then(() => {
-        alert("Report copied to clipboard! Ready to paste.");
-    }).catch(err => {
-        alert("Failed to copy: " + err);
-    });
+        alert("Report copied to clipboard!");
+    }).catch(err => { alert("Failed to copy: " + err); });
 }
 </script>
-
 </body>
 </html>
