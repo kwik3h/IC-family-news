@@ -11,15 +11,24 @@
         
         .input-group { display: flex; gap: 10px; margin-bottom: 10px; }
         input[type="text"], textarea { width: 100%; background: #010409; color: #58a6ff; border: 1px solid #30363d; padding: 10px; margin-bottom: 10px; border-radius: 6px; font-family: monospace; box-sizing: border-box; }
-        textarea { height: 250px; }
+        textarea { height: 200px; }
         
-        .btn-container { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
+        .btn-container { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
         button { background: #238636; color: white; border: 1px solid rgba(240,246,252,0.1); padding: 8px 16px; cursor: pointer; font-weight: bold; border-radius: 6px; transition: 0.2s; }
         button:hover { background: #2ea043; }
         .copy-btn { background: #1f6feb; }
         .copy-btn:hover { background: #388bfd; }
+        .clear-btn { background: #da3633; }
+        .clear-btn:hover { background: #f85149; }
         
         .save-status { color: #8b949e; font-size: 0.85em; font-style: italic; }
+        .memory-status { color: #3fb950; font-size: 0.9em; font-weight: bold; margin-bottom: 10px; display: block; }
+        
+        /* Profiles UI */
+        .profiles-container { margin-bottom: 15px; padding: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .profile-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; padding: 5px 12px; font-size: 0.9em; }
+        .profile-btn:hover { background: #30363d; border-color: #8b949e; }
+        .profile-label { font-weight: bold; color: #8b949e; margin-right: 10px; }
         
         /* Output Box Styling */
         .output-container { background: #161b22; padding: 20px; border: 1px solid #30363d; border-radius: 6px; font-family: 'Courier New', Courier, monospace; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-wrap: break-word; }
@@ -48,7 +57,7 @@
 
 <div>
     <h1>Infiltration Report Parser</h1>
-    <p>Paste raw infiltrated logs. Coordinates become clickable with Galaxy ID.</p>
+    <p>Track multiple empires. Type a name to create a profile, or click a saved profile below to add to their logs without doubling up.</p>
 </div>
 
 <div class="input-group">
@@ -57,17 +66,28 @@
     <input type="text" id="galaxyIdInput" placeholder="Galaxy ID (e.g., 266)" oninput="saveSettings()">
 </div>
 
+<div class="input-group" style="margin-bottom: 5px;">
+    <input type="text" id="targetEmpireInput" placeholder="Enter the Target's Empire Name (Who did you infiltrate?)" oninput="updateMemoryStatus()" style="border-color: #d2a8ff;">
+</div>
+
+<div id="profilesContainer" class="profiles-container">
+    <span class="profile-label">Tracked Empires:</span>
+    </div>
+
+<span id="memoryStatus" class="memory-status">Currently holding 0 log events for this target.</span>
 <textarea id="logInput" placeholder="Paste your raw infiltrated game logs here..."></textarea>
 
 <div class="btn-container">
     <button onclick="processLogs()">Process Logs</button>
     <button class="copy-btn" onclick="copyToClipboard()">Copy Report to Clipboard</button>
+    <button class="clear-btn" onclick="clearTargetMemory()">Clear Target's Logs</button>
     <span id="saveStatus" class="save-status"></span>
 </div>
 
 <div id="output" class="output-container">Result will appear here...</div>
 
 <script>
+// --- SETTINGS STORAGE ---
 function saveSettings() {
     const settings = {
         username: document.getElementById('usernameInput').value,
@@ -75,9 +95,6 @@ function saveSettings() {
         galaxyId: document.getElementById('galaxyIdInput').value
     };
     localStorage.setItem('ic_infil_settings', JSON.stringify(settings));
-    const status = document.getElementById('saveStatus');
-    status.innerText = "Settings saved...";
-    setTimeout(() => { status.innerText = ""; }, 1500);
 }
 
 function loadSettings() {
@@ -90,8 +107,86 @@ function loadSettings() {
     }
 }
 
-window.onload = loadSettings;
+// --- MULTI-USER MEMORY LOGIC ---
+function getStoredInfils() {
+    const saved = localStorage.getItem('ic_infil_memory_v2');
+    return saved ? JSON.parse(saved) : {};
+}
 
+function saveStoredInfils(data) {
+    localStorage.setItem('ic_infil_memory_v2', JSON.stringify(data));
+    renderProfiles();
+}
+
+function renderProfiles() {
+    const data = getStoredInfils();
+    const container = document.getElementById('profilesContainer');
+    let html = `<span class="profile-label">Tracked Empires:</span>`;
+    
+    const targets = Object.keys(data).sort();
+    if (targets.length === 0) {
+        html += `<span style="color: #8b949e; font-style: italic;">No profiles saved yet. Process a log to create one.</span>`;
+    } else {
+        targets.forEach(target => {
+            let logCount = data[target].length;
+            html += `<button class="profile-btn" onclick="selectProfile('${target}')">${target} (${logCount})</button>`;
+        });
+    }
+    container.innerHTML = html;
+    updateMemoryStatus();
+}
+
+function selectProfile(name) {
+    document.getElementById('targetEmpireInput').value = name;
+    document.getElementById('logInput').value = ""; // Clear input box when switching
+    updateMemoryStatus();
+    
+    // Automatically generate the report for this selected profile
+    processLogs(true); 
+}
+
+function updateMemoryStatus() {
+    const target = document.getElementById('targetEmpireInput').value.trim();
+    if (!target) {
+        document.getElementById('memoryStatus').innerText = "Enter a target name above to track logs.";
+        document.getElementById('memoryStatus').style.color = "#8b949e";
+        return;
+    }
+    
+    const data = getStoredInfils();
+    const count = data[target] ? data[target].length : 0;
+    document.getElementById('memoryStatus').innerText = `Currently holding ${count} unique log blocks for ${target}.`;
+    document.getElementById('memoryStatus').style.color = "#3fb950";
+}
+
+function clearTargetMemory() {
+    const target = document.getElementById('targetEmpireInput').value.trim();
+    if (!target) {
+        alert("Please enter or select a target name first.");
+        return;
+    }
+    
+    if(confirm(`Are you sure you want to clear all saved logs for ${target}?`)) {
+        let data = getStoredInfils();
+        delete data[target];
+        saveStoredInfils(data);
+        
+        document.getElementById('logInput').value = "";
+        document.getElementById('output').innerHTML = "Result will appear here...";
+        
+        const status = document.getElementById('saveStatus');
+        status.innerText = `${target}'s memory cleared.`;
+        setTimeout(() => { status.innerText = ""; }, 2000);
+    }
+}
+
+// Initialize on page load
+window.onload = () => {
+    loadSettings();
+    renderProfiles();
+};
+
+// --- HELPER FUNCTIONS ---
 function createPlanetLink(planetNum, x, y, galaxyId) {
     const label = `Planet ${planetNum} (${x}:${y})`;
     if (!galaxyId) return `<b>${label}</b>`;
@@ -115,11 +210,39 @@ function normalizeName(name) {
     return name;
 }
 
-function processLogs() {
+// --- MAIN PROCESSING ---
+// The isLoadOnly flag allows us to generate the report without showing "Settings saved" if we just clicked a profile
+function processLogs(isLoadOnly = false) {
+    const target = document.getElementById('targetEmpireInput').value.trim();
+    if (!target) {
+        alert("You must enter a Target Empire Name to save and process logs.");
+        return;
+    }
+
     const rawData = document.getElementById('logInput').value;
     const galaxyId = document.getElementById('galaxyIdInput').value.trim();
-    const blocks = rawData.split(/(?=T-\d+:)/).map(b => b.trim()).filter(b => b);
+    
+    // Split new logs into blocks
+    const newBlocks = rawData.split(/(?=T-\d+:)/).map(b => b.trim()).filter(b => b);
 
+    // Fetch memory and deduplicate
+    let memoryData = getStoredInfils();
+    let targetLogs = memoryData[target] || [];
+    
+    const allUniqueBlocksSet = new Set([...targetLogs, ...newBlocks]);
+    const finalBlocksToProcess = Array.from(allUniqueBlocksSet);
+    
+    // Save merged logs back to memory
+    memoryData[target] = finalBlocksToProcess;
+    saveStoredInfils(memoryData); // This also updates UI/Memory count
+
+    if (!isLoadOnly) {
+        const status = document.getElementById('saveStatus');
+        status.innerText = "Logs processed & saved...";
+        setTimeout(() => { status.innerText = ""; }, 1500);
+    }
+
+    // --- PARSING THE MERGED DATA ---
     let units = {};
     let buildings = {};
     let aidReceived = {};
@@ -129,7 +252,7 @@ function processLogs() {
     let defenseSuccess = [];
     let defenseFail = {};
 
-    blocks.forEach(block => {
+    finalBlocksToProcess.forEach(block => {
         if (block.includes("Construction completed")) {
             let match = block.match(/We have built ([\d,]+) (.*?)\./);
             if (match) {
@@ -192,41 +315,64 @@ function processLogs() {
         }
     });
 
-    let html = `<div style="font-weight: bold; margin-bottom: 10px;">Infiltration Summary Report</div>`;
+    let html = `<div style="font-weight: bold; margin-bottom: 10px; color: #d2a8ff; font-size: 1.2em;">Infiltration Summary: ${target}</div>`;
+    
     html += `<div class="section-header">Units Constructed</div>`;
     if (Object.keys(units).length > 0) {
         Object.keys(units).sort((a,b) => units[b] - units[a]).forEach(u => {
             html += `<div>* <b>${u}:</b> ${units[u].toLocaleString()}</div>`;
         });
-    }
+    } else { html += `<div>No units constructed.</div>`; }
+
     html += `<div class="section-header">Aid Received</div>`;
     const resourceOrder = ["Cash", "Food", "Iron", "Octarine", "Endurium"];
+    let aidFound = false;
     Object.keys(aidReceived).sort().forEach(sender => {
         let r = aidReceived[sender];
         let parts = [];
         resourceOrder.forEach(k => { if (r[k] > 0) parts.push(`<div>* <span class="res-${k}">${r[k].toLocaleString()} ${k}</span></div>`); });
         if (parts.length > 0) {
+            aidFound = true;
             html += `<div style="margin-top: 15px;"><b>From <span class="emp-name">${sender}</span>:</b></div>` + parts.join('');
         }
     });
+    if (!aidFound) html += `<div>No aid received.</div>`;
+
     html += `<div class="section-header">Defense Reports</div><div class="success-text">Successful Defenses (${defenseSuccess.length}):</div>`;
-    defenseSuccess.forEach(d => html += `<div>* ${d}</div>`);
+    if (defenseSuccess.length > 0) {
+        defenseSuccess.forEach(d => html += `<div>* ${d}</div>`);
+    } else { html += `<div>None.</div>`; }
+
     let failCount = Object.values(defenseFail).reduce((acc, arr) => acc + arr.length, 0);
     html += `<div class="fail-text" style="margin-top: 15px;">Failed Defenses (${failCount}):</div>`;
-    Object.keys(defenseFail).forEach(attacker => {
-        let incidents = defenseFail[attacker];
-        html += `<div style="margin-top: 10px;">* <b>vs. <span class="emp-name">${attacker}</span>:</b> ${incidents.length} planet(s) lost.</div>`;
-        incidents.forEach(i => { html += `<div style="margin-left: 20px;">- ${i.link}: ${i.result}</div>`; });
-    });
+    if (failCount > 0) {
+        Object.keys(defenseFail).forEach(attacker => {
+            let incidents = defenseFail[attacker];
+            html += `<div style="margin-top: 10px;">* <b>vs. <span class="emp-name">${attacker}</span>:</b> ${incidents.length} planet(s) lost.</div>`;
+            incidents.forEach(i => { html += `<div style="margin-left: 20px;">- ${i.link}: ${i.result}</div>`; });
+        });
+    } else { html += `<div>None.</div>`; }
+
     html += `<div class="section-header">Fleet Movements</div>`;
-    Object.keys(fleets).forEach(f => { html += `<div>* ${f}: Targeted ${fleets[f]} time(s)</div>`; });
+    if (Object.keys(fleets).length > 0) {
+        Object.keys(fleets).forEach(f => { html += `<div>* ${f}: Targeted ${fleets[f]} time(s)</div>`; });
+    } else { html += `<div>No fleets arrived.</div>`; }
+
     html += `<div class="section-header">Planetary Development</div><div><b>Exploration:</b> ${exploredCount} planet(s).</div><div><b>Portals:</b> ${portals.length > 0 ? portals.join(", ") : "None"}.</div>`;
-    Object.keys(buildings).forEach(b => { html += `<div>* <b>${b}:</b> ${buildings[b].toLocaleString()}</div>`; });
+    html += `<div style="margin-top: 10px;"><b>Buildings:</b></div>`;
+    if (Object.keys(buildings).length > 0) {
+        Object.keys(buildings).forEach(b => { html += `<div>* <b>${b}:</b> ${buildings[b].toLocaleString()}</div>`; });
+    } else { html += `<div>No buildings constructed.</div>`; }
+    
     document.getElementById('output').innerHTML = html;
 }
 
 function copyToClipboard() {
     const outputContainer = document.getElementById('output');
+    if (outputContainer.innerText.includes("Result will appear here")) {
+        alert("Please process logs before copying!");
+        return;
+    }
     navigator.clipboard.writeText(outputContainer.innerText).then(() => { alert("Report copied!"); });
 }
 </script>
