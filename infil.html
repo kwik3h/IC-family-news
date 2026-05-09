@@ -63,7 +63,7 @@
 <div class="input-group">
     <input type="text" id="usernameInput" placeholder="Your Empire Name" oninput="saveSettings()">
     <input type="text" id="familyIdInput" placeholder="Target Family ID" oninput="saveSettings()">
-    <input type="text" id="galaxyIdInput" placeholder="Galaxy ID (e.g., 266)" oninput="saveSettings()">
+    <input type="text" id="galaxyIdInput" placeholder="Galaxy ID (e.g., 269)" oninput="saveSettings()">
 </div>
 
 <div class="input-group" style="margin-bottom: 5px;">
@@ -190,7 +190,8 @@ window.onload = () => {
 function createPlanetLink(planetNum, x, y, galaxyId) {
     const label = `Planet ${planetNum} (${x}:${y})`;
     if (!galaxyId) return `<b>${label}</b>`;
-    const url = `https://imperialconflict.com/systems/view.php?galaxy=${galaxyId}&system=${x},${y}`;
+    // Changed URL format specifically for Planets View
+    const url = `https://imperialconflict.com/planets/view.php?galaxy=${galaxyId}&planet=${x},${y}:${planetNum}`;
     return `<a href="${url}" target="_blank" class="planet-link">${label}</a>`;
 }
 
@@ -203,7 +204,8 @@ function normalizeName(name) {
         "Refinement station": "Refinement Stations",
         "Research center": "Research Centers",
         "Hydroponic farm": "Hydroponic Farms",
-        "Occult center": "Occult Centers"
+        "Occult center": "Occult Centers",
+        "Cash factory": "Cash factorys"
     };
     if (mapping[name]) return mapping[name];
     if (!name.endsWith("s")) return name + "s";
