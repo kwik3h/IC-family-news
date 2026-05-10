@@ -275,9 +275,21 @@ function processLogs(isLoadOnly = false) {
             let mk = block.match(/planet (\d+) at x:(\d+), y:(\d+) was attacked/i);
             if (mk) addKnownPlanet(mk[1], mk[2], mk[3]);
         }
-        if (block.includes("Portal completed")) {
-            let mk = block.match(/planet (\d+) in the (\d+)[:,](\d+) system/i);
+        
+        // Extract from "Explored a planet" blocks
+        if (block.includes("Explored a planet")) {
+            exploredCount++;
+            let mk = block.match(/explored the planet (\d+) in the (\d+)[:,](\d+) system/i);
             if (mk) addKnownPlanet(mk[1], mk[2], mk[3]);
+        }
+
+        // Extract from "Portal completed" blocks
+        if (block.includes("Portal completed")) {
+            let mk = block.match(/portal on planet (\d+) in the (\d+)[:,](\d+) system/i);
+            if (mk) {
+                addKnownPlanet(mk[1], mk[2], mk[3]);
+                portedPlanetsMap.set(`${mk[2]}:${mk[3]}:${mk[1]}`, {num: mk[1], x: mk[2], y: mk[3]});
+            }
         }
 
         // Extract raw Portals List (often at the bottom of the log)
@@ -341,9 +353,6 @@ function processLogs(isLoadOnly = false) {
             }
         }
         
-        // --- EXPLORATION COUNT ---
-        if (block.includes("Explored a planet")) exploredCount++;
-        
         // --- DEFENSE REPORTS ---
         if (block.includes("Defense Report")) {
             if (block.includes("fight the attackers off")) {
@@ -364,6 +373,7 @@ function processLogs(isLoadOnly = false) {
                     
                     // Remove from known planets if they lost it
                     knownPlanetsMap.delete(`${match[2]}:${match[3]}:${match[1]}`);
+                    portedPlanetsMap.delete(`${match[2]}:${match[3]}:${match[1]}`);
                 }
             }
         }
