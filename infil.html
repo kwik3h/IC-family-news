@@ -251,7 +251,8 @@ function processLogs(isLoadOnly = false) {
 
     // --- PARSING THE MERGED DATA ---
     let units = {};
-    let buildings = {};
+    let buildingsBuilt = {}; // Tracks new buildings built in this log block
+    let buildingsTotal = {}; // Tracks the static "Buildings:" total at the bottom
     let aidReceived = {};
     let fleets = {};
     let exploredCount = 0;
@@ -263,9 +264,7 @@ function processLogs(isLoadOnly = false) {
 
     function addKnownPlanet(num, x, y) {
         knownPlanetsMap.set(`${x}:${y}:${num}`, {num: num, x: x, y: y});
-    }
-
-    finalBlocksToProcess.forEach(block => {
+    }    finalBlocksToProcess.forEach(block => {
         // --- PLANET TRACKING FROM ACTIONS ---
         if (block.includes("Construction completed") || block.includes("Buildings complete")) {
             let mk = block.match(/planet (\d+) in the (\d+)[:,](\d+) system/i);
@@ -314,9 +313,19 @@ function processLogs(isLoadOnly = false) {
                 if (lm) {
                     let name = normalizeName(lm[1]);
                     let qty = parseInt(lm[2].replace(/,/g, ''));
-                    buildings[name] = Math.max((buildings[name] || 0), qty);
+                    buildingsTotal[name] = Math.max((buildingsTotal[name] || 0), qty);
                 }
             });
+        }
+
+        // --- NEW BUILDINGS CONSTRUCTED (ACTIONS) ---
+        if (block.includes("Buildings complete")) {
+            let match = block.match(/We have built ([\d,]+) (.*?) on/);
+            if (match) {
+                let qty = parseInt(match[1].replace(/,/g, ''));
+                let name = normalizeName(match[2]);
+                buildingsBuilt[name] = (buildingsBuilt[name] || 0) + qty;
+            }
         }
 
         // --- UNITS ---
@@ -410,11 +419,21 @@ function processLogs(isLoadOnly = false) {
         notPortedArr.forEach(p => html += `<div>* ${createPlanetLink(p.num, p.x, p.y, galaxyId)}</div>`);
     } else { html += `<div>None detected.</div>`; }
 
-    // --- BUILDINGS ---
-    html += `<div style="margin-top: 20px;"><b>Buildings:</b></div>`;
-    if (Object.keys(buildings).length > 0) {
-        Object.keys(buildings).forEach(b => { html += `<div>* <b>${b}:</b> ${buildings[b].toLocaleString()}</div>`; });
-    } else { html += `<div>No buildings detected.</div>`; }
+    // --- BUILDINGS CONSTRUCTED (NEW) ---
+    html += `<div class="section-header">Buildings Constructed (New)</div>`;
+    if (Object.keys(buildingsBuilt).length > 0) {
+        Object.keys(buildingsBuilt).sort((a,b) => buildingsBuilt[b] - buildingsBuilt[a]).forEach(b => {
+            html += `<div>* <b>${b}:</b> ${buildingsBuilt[b].toLocaleString()}</div>`;
+        });
+    } else { html += `<div>No new buildings constructed in this log.</div>`; }
+
+    // --- BUILDINGS TOTAL (SUMMARY) ---
+    html += `<div class="section-header">Total Buildings (Summary)</div>`;
+    if (Object.keys(buildingsTotal).length > 0) {
+        Object.keys(buildingsTotal).sort((a,b) => buildingsTotal[b] - buildingsTotal[a]).forEach(b => { 
+            html += `<div>* <b>${b}:</b> ${buildingsTotal[b].toLocaleString()}</div>`; 
+        });
+    } else { html += `<div>No building summary detected.</div>`; }
 
     // --- UNITS ---
     html += `<div class="section-header">Units Constructed</div>`;
@@ -475,3 +494,6 @@ function copyToClipboard() {
 </script>
 </body>
 </html>
+
+
+    
